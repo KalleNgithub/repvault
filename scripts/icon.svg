@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 32 32">
+  <!-- Deep purple background -->
+  <rect width="32" height="32" fill="#1a0533"/>
+  <!-- Center bar -->
+  <rect x="2" y="15" width="28" height="2" fill="#ff8c5a"/>
+  <!-- Left side: 2 big 25kg plates + 1 small 2.5kg plate on end -->
+  <rect x="9" y="6" width="3" height="20" fill="#ff6b2b"/>
+  <rect x="6" y="6" width="3" height="20" fill="#ff2975"/>
+  <!-- Left small plate -->
+  <rect x="3" y="13" width="2" height="6" fill="#ff2975" opacity="0.7"/>
+  <!-- Right side: 2 big 25kg plates + 1 small 2.5kg plate on end -->
+  <rect x="20" y="6" width="3" height="20" fill="#ff6b2b"/>
+  <rect x="23" y="6" width="3" height="20" fill="#ff2975"/>
+  <!-- Right small plate -->
+  <rect x="27" y="13" width="2" height="6" fill="#ff2975" opacity="0.7"/>
+  <!-- Cyan glow accents on top of big plates -->
+  <rect x="9" y="6" width="3" height="1" fill="#00f5d4" opacity="0.5"/>
+  <rect x="20" y="6" width="3" height="1" fill="#00f5d4" opacity="0.5"/>
+</svg>

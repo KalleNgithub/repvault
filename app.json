@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "RepVault",
+    "slug": "repvault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1a0533",
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "web": {
+      "favicon": "./public/favicon.ico",
+      "bundler": "metro"
+    },
+    "scheme": "repvault",
+    "plugins": ["expo-router", "expo-sqlite"]
+  }
+}
