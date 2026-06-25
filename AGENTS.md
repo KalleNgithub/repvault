@@ -105,9 +105,38 @@ npx tsc --noEmit         # Type check (excludes tests/)
 - expo-sqlite SharedArrayBuffer requires COOP/COEP headers (web doesn't use it)
 - Metro caching: config changes require `--clear` and browser hard refresh
 
-## PR / Commit Guidelines
+## Git Conventions
 
-- Squash related changes into meaningful commits
-- Commit messages: imperative mood, summary line < 72 chars
-- Run `npm test` and `npx tsc --noEmit` before committing
+### Branching
+- `master` is the production branch — always deployable
+- Feature work on short-lived branches: `feat/<description>`, `fix/<description>`
+- Delete branches after merge
+
+### Commits
+- Imperative mood, summary line < 72 chars: "Add exercise deletion" not "Added exercise deletion"
+- Body (if needed): wrap at 72 chars, explain *why* not *what*
+- One logical change per commit — don't mix unrelated features
+- Run `npm test` and `npm run typecheck` before committing
 - Reference ADRs when making architectural changes
+
+### Workflow for agents
+- Do NOT commit directly to `master` during feature work — use a branch
+- Squash fixup/wip commits before merging (interactive rebase or squash merge)
+- If a task involves multiple independent changes, use separate commits (not one mega-commit)
+- Never force-push `master`
+- Never commit `node_modules/`, `dist/`, `.expo/`, or secrets
+
+### Commit message format
+```
+<summary line — what changed>
+
+<optional body — why, trade-offs, context>
+
+Co-authored-by: ...
+```
+
+### When to commit
+- After each logical unit of work passes tests
+- Before switching to a different area of the codebase
+- After fixing a bug (separate commit from the feature that exposed it)
+
