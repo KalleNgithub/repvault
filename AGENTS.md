@@ -108,8 +108,8 @@ npx tsc --noEmit         # Type check (excludes tests/)
 ## Git Conventions
 
 ### Branching
-- `master` is the production branch — always deployable
-- Feature work on short-lived branches: `feat/<description>`, `fix/<description>`
+- `master` is the production branch — only receives merges, never direct commits
+- All work happens on branches: `feat/<description>`, `fix/<description>`, `dev`, etc.
 - Delete branches after merge
 
 ### Commits
@@ -120,9 +120,9 @@ npx tsc --noEmit         # Type check (excludes tests/)
 - Reference ADRs when making architectural changes
 
 ### Workflow for agents
-- Do NOT commit directly to `master` during feature work — use a branch
-- Squash fixup/wip commits before merging (interactive rebase or squash merge)
-- If a task involves multiple independent changes, use separate commits (not one mega-commit)
+- **NEVER commit directly to `master`** — always work on a branch
+- The user decides when work is ready to merge to master
+- Squash fixup/wip commits before requesting merge
 - Never force-push `master`
 - Never commit `node_modules/`, `dist/`, `.expo/`, or secrets
 
