@@ -193,6 +193,16 @@ export default function WorkoutScreen() {
     setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, collapsed: !b.collapsed } : b));
   };
 
+  const moveExercise = (idx: number, direction: -1 | 1) => {
+    const target = idx + direction;
+    setBlocks(prev => {
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
+
   const handleFinish = async () => {
     await finishWorkout(db, workoutId);
     router.back();
@@ -264,11 +274,25 @@ export default function WorkoutScreen() {
       <ScrollView style={styles.scroll}>
         {blocks.map((block, idx) => (
           <View key={block.exercise.id} style={styles.exerciseBlock}>
-            <Pressable onPress={() => toggleCollapse(idx)} style={styles.exerciseHeader}>
-              <Text style={styles.exerciseName}>
-                {block.collapsed ? '►' : '▼'} {translateExercise(block.exercise.name, locale)}
-              </Text>
-            </Pressable>
+            <View style={styles.exerciseHeader}>
+              <Pressable onPress={() => toggleCollapse(idx)} style={styles.exerciseNameWrap}>
+                <Text style={styles.exerciseName}>
+                  {block.collapsed ? '►' : '▼'} {translateExercise(block.exercise.name, locale)}
+                </Text>
+              </Pressable>
+              <View style={styles.reorderButtons}>
+                {idx > 0 && (
+                  <Pressable onPress={() => moveExercise(idx, -1)} style={styles.reorderBtn}>
+                    <Text style={styles.reorderText}>▲</Text>
+                  </Pressable>
+                )}
+                {idx < blocks.length - 1 && (
+                  <Pressable onPress={() => moveExercise(idx, 1)} style={styles.reorderBtn}>
+                    <Text style={styles.reorderText}>▼</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
 
             {!block.collapsed && (
               <View style={styles.setsTable}>
@@ -375,27 +399,29 @@ export default function WorkoutScreen() {
           </View>
         ))}
 
-        <Pressable style={styles.addExerciseBtn} onPress={() => setShowExercisePicker(true)}>
-          <Text style={styles.addExerciseText}>{t.addExercise}</Text>
-        </Pressable>
+        <View style={showExercisePicker ? styles.pickerContainer : undefined}>
+          <Pressable
+            style={[styles.addExerciseBtn, showExercisePicker && styles.addExerciseBtnOpen]}
+            onPress={() => setShowExercisePicker(!showExercisePicker)}
+          >
+            <Text style={styles.addExerciseText}>{t.addExercise}</Text>
+          </Pressable>
 
-        {showExercisePicker && (
-          <View style={styles.picker}>
-            {allExercises
-              .filter(e => !blocks.some(b => b.exercise.id === e.id))
-              .sort((a, b) =>
-                translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
-              )
-              .map(e => (
-                <Pressable key={e.id} style={styles.pickerItem} onPress={() => handleAddExercise(e)}>
-                  <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
-                </Pressable>
-              ))}
-            <Pressable style={styles.pickerCancel} onPress={() => setShowExercisePicker(false)}>
-              <Text style={styles.pickerCancelText}>{t.cancel}</Text>
-            </Pressable>
-          </View>
-        )}
+          {showExercisePicker && (
+            <View style={styles.pickerList}>
+              {allExercises
+                .filter(e => !blocks.some(b => b.exercise.id === e.id))
+                .sort((a, b) =>
+                  translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
+                )
+                .map(e => (
+                  <Pressable key={e.id} style={styles.pickerItem} onPress={() => handleAddExercise(e)}>
+                    <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
+                  </Pressable>
+                ))}
+            </View>
+          )}
+        </View>
 
         <Pressable style={styles.finishBtn} onPress={handleFinish}>
           <Text style={styles.finishText}>{t.finishWorkout}</Text>
@@ -436,8 +462,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  exerciseHeader: { padding: 10 },
+  exerciseHeader: { padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  exerciseNameWrap: { flex: 1 },
   exerciseName: { color: colors.textPrimary, fontSize: 16, fontWeight: 'bold' },
+  reorderButtons: { flexDirection: 'row', gap: 4 },
+  reorderBtn: { paddingHorizontal: 8, paddingVertical: 2 },
+  reorderText: { color: colors.textSecondary, fontSize: 14 },
   setsTable: { paddingHorizontal: 10, paddingBottom: 8 },
   // History row
   historyRow: {
@@ -543,17 +573,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  addExerciseBtnOpen: {
+    borderStyle: 'solid',
+    borderColor: colors.purple,
+    borderBottomWidth: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+  },
   addExerciseText: { color: colors.textSecondary, fontSize: 16 },
-  picker: {
-    backgroundColor: colors.bgInput,
-    borderRadius: 8,
-    padding: 8,
+  pickerContainer: {
     marginBottom: 12,
+  },
+  pickerList: {
+    backgroundColor: colors.bgInput,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.purple,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    padding: 8,
   },
   pickerItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   pickerText: { color: colors.textPrimary, fontSize: 16 },
-  pickerCancel: { paddingVertical: 10, alignItems: 'center' },
-  pickerCancelText: { color: colors.pink, fontSize: 16 },
   finishBtn: {
     backgroundColor: colors.accent,
     padding: 14,

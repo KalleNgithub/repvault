@@ -64,7 +64,7 @@ export async function getWorkoutWithSets(db: DB, workoutId: number) {
      FROM workout_sets ws 
      JOIN exercises e ON e.id = ws.exercise_id 
      WHERE ws.workout_id = ? 
-     ORDER BY ws.exercise_id, ws.set_index`,
+     ORDER BY ws.id, ws.set_index`,
     [workoutId]
   );
   return { workout, sets };
