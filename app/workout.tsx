@@ -375,10 +375,6 @@ export default function WorkoutScreen() {
           </View>
         ))}
 
-        <Pressable style={styles.addExerciseBtn} onPress={() => setShowExercisePicker(true)}>
-          <Text style={styles.addExerciseText}>{t.addExercise}</Text>
-        </Pressable>
-
         {showExercisePicker && (
           <View style={styles.picker}>
             {allExercises
@@ -396,6 +392,10 @@ export default function WorkoutScreen() {
             </Pressable>
           </View>
         )}
+
+        <Pressable style={styles.addExerciseBtn} onPress={() => setShowExercisePicker(!showExercisePicker)}>
+          <Text style={styles.addExerciseText}>{showExercisePicker ? t.cancel : t.addExercise}</Text>
+        </Pressable>
 
         <Pressable style={styles.finishBtn} onPress={handleFinish}>
           <Text style={styles.finishText}>{t.finishWorkout}</Text>
