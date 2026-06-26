@@ -411,9 +411,6 @@ export default function WorkoutScreen() {
                   <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
                 </Pressable>
               ))}
-            <Pressable style={styles.pickerCancel} onPress={() => setShowExercisePicker(false)}>
-              <Text style={styles.pickerCancelText}>{t.cancel}</Text>
-            </Pressable>
           </View>
         )}
 
