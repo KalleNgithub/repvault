@@ -17,7 +17,16 @@ Parameterized scripts for Azure Static Web Apps deployment.
 | `set-github-secret.sh` | Push token to GitHub Actions secrets |
 | `destroy.sh` | Tear down all resources |
 
-## Usage
+## Setup
+
+Copy the example params file and edit with your values:
+
+```bash
+cp infra/params.env.example infra/params.env
+# Edit infra/params.env with your actual GITHUB_REPO etc.
+```
+
+`params.env` is gitignored. The `.example` file is tracked as a template.
 
 ```bash
 # First time setup
