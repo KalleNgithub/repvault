@@ -399,24 +399,29 @@ export default function WorkoutScreen() {
           </View>
         ))}
 
-        {showExercisePicker && (
-          <View style={styles.picker}>
-            {allExercises
-              .filter(e => !blocks.some(b => b.exercise.id === e.id))
-              .sort((a, b) =>
-                translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
-              )
-              .map(e => (
-                <Pressable key={e.id} style={styles.pickerItem} onPress={() => handleAddExercise(e)}>
-                  <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
-                </Pressable>
-              ))}
-          </View>
-        )}
+        <View style={showExercisePicker ? styles.pickerContainer : undefined}>
+          <Pressable
+            style={[styles.addExerciseBtn, showExercisePicker && styles.addExerciseBtnOpen]}
+            onPress={() => setShowExercisePicker(!showExercisePicker)}
+          >
+            <Text style={styles.addExerciseText}>{t.addExercise}</Text>
+          </Pressable>
 
-        <Pressable style={styles.addExerciseBtn} onPress={() => setShowExercisePicker(!showExercisePicker)}>
-          <Text style={styles.addExerciseText}>{showExercisePicker ? t.cancel : t.addExercise}</Text>
-        </Pressable>
+          {showExercisePicker && (
+            <View style={styles.pickerList}>
+              {allExercises
+                .filter(e => !blocks.some(b => b.exercise.id === e.id))
+                .sort((a, b) =>
+                  translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
+                )
+                .map(e => (
+                  <Pressable key={e.id} style={styles.pickerItem} onPress={() => handleAddExercise(e)}>
+                    <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
+                  </Pressable>
+                ))}
+            </View>
+          )}
+        </View>
 
         <Pressable style={styles.finishBtn} onPress={handleFinish}>
           <Text style={styles.finishText}>{t.finishWorkout}</Text>
@@ -568,17 +573,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  addExerciseBtnOpen: {
+    borderStyle: 'solid',
+    borderColor: colors.purple,
+    borderBottomWidth: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+  },
   addExerciseText: { color: colors.textSecondary, fontSize: 16 },
-  picker: {
-    backgroundColor: colors.bgInput,
-    borderRadius: 8,
-    padding: 8,
+  pickerContainer: {
     marginBottom: 12,
+  },
+  pickerList: {
+    backgroundColor: colors.bgInput,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.purple,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    padding: 8,
   },
   pickerItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   pickerText: { color: colors.textPrimary, fontSize: 16 },
-  pickerCancel: { paddingVertical: 10, alignItems: 'center' },
-  pickerCancelText: { color: colors.pink, fontSize: 16 },
   finishBtn: {
     backgroundColor: colors.accent,
     padding: 14,
