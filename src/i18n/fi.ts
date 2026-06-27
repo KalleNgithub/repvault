@@ -14,7 +14,7 @@ export const fi: TranslationKeys = {
 
   // Workout
   rest: 'LEPO',
-  lap: 'VÄLI',
+  lap: 'KIERROS',
   start: 'ALOITA',
   stop: 'PYSÄYTÄ',
   reset: 'NOLLAA',

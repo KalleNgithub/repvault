@@ -9,6 +9,7 @@ export interface Workout {
   started_at: string;
   finished_at: string | null;
   notes: string | null;
+  device: string | null;
 }
 
 export interface WorkoutSet {

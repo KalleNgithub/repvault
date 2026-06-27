@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { DB } from './interface';
 
 export async function initDatabase(db: DB): Promise<void> {
@@ -28,9 +29,23 @@ export async function initDatabase(db: DB): Promise<void> {
       completed_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sets_workout ON workout_sets(workout_id);
     CREATE INDEX IF NOT EXISTS idx_sets_exercise ON workout_sets(exercise_id);
   `);
+
+  // Migration: add device column to workouts (native SQLite only — web/IndexedDB is schemaless)
+  if (Platform.OS !== 'web') {
+    const cols = await db.getAllAsync<{ name: string }>("PRAGMA table_info(workouts)");
+    const hasDevice = cols.some(c => c.name === 'device');
+    if (!hasDevice) {
+      await db.execAsync('ALTER TABLE workouts ADD COLUMN device TEXT');
+    }
+  }
 }
 
 export async function deduplicateExercises(db: DB): Promise<void> {

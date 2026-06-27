@@ -10,8 +10,8 @@ interface TableRow {
 }
 
 const DB_NAME = 'workout-log';
-const DB_VERSION = 1;
-const STORES = ['exercises', 'workouts', 'workout_sets'] as const;
+const DB_VERSION = 2;
+const STORES = ['exercises', 'workouts', 'workout_sets', 'settings'] as const;
 
 let autoId = Date.now();
 
@@ -20,7 +20,11 @@ export async function openWebDatabase(): Promise<DB> {
     upgrade(db) {
       for (const store of STORES) {
         if (!db.objectStoreNames.contains(store)) {
-          db.createObjectStore(store, { keyPath: 'id', autoIncrement: true });
+          if (store === 'settings') {
+            db.createObjectStore(store, { keyPath: 'key' });
+          } else {
+            db.createObjectStore(store, { keyPath: 'id', autoIncrement: true });
+          }
         }
       }
     },
@@ -86,6 +90,7 @@ class WebDB implements DB {
         started_at: new Date().toISOString(),
         finished_at: null,
         notes: null,
+        device: null,
       };
       const id = await this.idb.add(table, row);
       return { lastInsertRowId: id as number, changes: 1 };
@@ -110,7 +115,22 @@ class WebDB implements DB {
       }
     });
 
+    const upsert = /ON\s+CONFLICT\s*\(\s*\w+\s*\)\s*DO\s+UPDATE/i.test(sql);
     const ignoreConflict = /INSERT\s+OR\s+IGNORE/i.test(sql);
+
+    // Ensure workouts have defaults for required fields
+    if (table === 'workouts') {
+      if (!row.started_at) row.started_at = new Date().toISOString();
+      if (!('finished_at' in row)) row.finished_at = null;
+      if (!('notes' in row)) row.notes = null;
+      if (!('device' in row)) row.device = null;
+    }
+
+    if (upsert) {
+      // Upsert: use put() which overwrites existing key
+      await this.idb.put(table, row);
+      return { lastInsertRowId: 0, changes: 1 };
+    }
 
     const id = await this.idb.add(table, row).catch((err: any) => {
       if (ignoreConflict && err?.name === 'ConstraintError') return 0;
@@ -290,7 +310,17 @@ class WebDB implements DB {
     for (const cond of conditions) {
       const cleanCond = cond.replace(/\w+\./g, '').trim();
 
-      if (/(\w+)\s*=\s*\?/i.test(cleanCond)) {
+      const inMatch = cleanCond.match(/(\w+)\s+IN\s*\(([^)]+)\)/i);
+      if (inMatch) {
+        const field = inMatch[1];
+        const placeholders = inMatch[2].split(',').map(s => s.trim());
+        const values: any[] = [];
+        for (const p of placeholders) {
+          if (p === '?') values.push(params[paramIdx++]);
+          else values.push(p);
+        }
+        rows = rows.filter(r => values.includes(r[field]));
+      } else if (/(\w+)\s*=\s*\?/i.test(cleanCond)) {
         const field = cleanCond.match(/(\w+)\s*=\s*\?/)![1];
         const value = params[paramIdx++];
         rows = rows.filter(r => r[field] === value);

@@ -1,3 +1,10 @@
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'web',
+    select: (objs: any) => objs.ios || objs.default,
+  },
+}));
+
 import type { DB, Row, RunResult } from '../src/db/interface';
 import { seedExercises, deduplicateExercises } from '../src/db/schema';
 

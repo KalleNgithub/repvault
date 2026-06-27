@@ -24,6 +24,9 @@ export default function ExercisesScreen() {
   const handleAdd = async () => {
     const name = newName.trim();
     if (!name) return;
+    // Enforce unique names (case-insensitive check)
+    const exists = exercises.some(e => e.name.toLowerCase() === name.toLowerCase());
+    if (exists) return;
     await addExercise(db, name);
     setNewName('');
     const updated = await getAllExercises(db);

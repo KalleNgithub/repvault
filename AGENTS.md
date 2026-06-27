@@ -129,6 +129,13 @@ npx tsc --noEmit         # Type check (excludes tests/)
 - Never force-push `master`
 - Never commit `node_modules/`, `dist/`, `.expo/`, or secrets
 
+### Testing workflow
+- **Tests are written last** — only after the feature implementation has stabilized
+- Do not write or fix tests while the feature is still being iterated
+- Wasting tokens against a moving target is to be avoided
+- Run `npm run typecheck` during development; `npm test` only before merge
+- Tests guard against regression on stable code, not WIP
+
 ### Commit message format
 ```
 <summary line — what changed>

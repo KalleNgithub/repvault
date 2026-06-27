@@ -1,6 +1,20 @@
 import type { DB } from './interface';
 import type { Exercise, Workout, WorkoutSet } from '../types';
 
+// --- Settings ---
+
+export async function getSetting(db: DB, key: string): Promise<string | null> {
+  const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
+  return row?.value ?? null;
+}
+
+export async function setSetting(db: DB, key: string, value: string): Promise<void> {
+  await db.runAsync(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [key, value]
+  );
+}
+
 // --- Exercises ---
 
 export async function getAllExercises(db: DB): Promise<Exercise[]> {
@@ -15,7 +29,10 @@ export async function addExercise(db: DB, name: string): Promise<Exercise> {
 // --- Workouts ---
 
 export async function createWorkout(db: DB): Promise<Workout> {
-  const result = await db.runAsync('INSERT INTO workouts DEFAULT VALUES');
+  const device = await getSetting(db, 'device_name');
+  const result = device
+    ? await db.runAsync('INSERT INTO workouts (device) VALUES (?)', [device])
+    : await db.runAsync('INSERT INTO workouts DEFAULT VALUES');
   const workout = await db.getFirstAsync<Workout>('SELECT * FROM workouts WHERE id = ?', [result.lastInsertRowId]);
   return workout!;
 }
