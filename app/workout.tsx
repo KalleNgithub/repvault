@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useDatabase } from '../src/db/DatabaseProvider';
 import { useI18n, translateExercise } from '../src/i18n';
 import {
@@ -13,8 +13,9 @@ import {
   getWorkoutWithSets,
   finishWorkout,
   type WorkoutHistory,
+  updateWorkoutStartedAt,
 } from '../src/db/queries';
-import type { Exercise, WorkoutSet } from '../src/types';
+import type { Exercise, Workout, WorkoutSet } from '../src/types';
 import { useStopwatch, formatTime } from '../src/hooks/useStopwatch';
 import { useMetronome } from '../src/hooks/useMetronome';
 import { colors } from '../src/theme';
@@ -56,6 +57,7 @@ export default function WorkoutScreen() {
   const stopwatch = useStopwatch();
   const metronome = useMetronome(60);
 
+  const [workout, setWorkout] = useState<Workout | null>(null);
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
@@ -65,7 +67,7 @@ export default function WorkoutScreen() {
   const [editValue, setEditValue] = useState('');
 
   const loadWorkout = useCallback(async () => {
-    const { sets } = await getWorkoutWithSets(db, workoutId);
+    const { workout, sets } = await getWorkoutWithSets(db, workoutId);
     const exercises = await getAllExercises(db);
     setAllExercises(exercises);
 
@@ -84,10 +86,37 @@ export default function WorkoutScreen() {
       const history = await getExerciseHistory(db, exId, workoutId, 3);
       newBlocks.push({ exercise, sets: exSets, lastSets, history, collapsed: false });
     }
-    setBlocks(newBlocks);
+
+    setWorkout(workout)
+    setBlocks(prevBlocks => {
+      return newBlocks.map(nb => {
+        const existing = prevBlocks.find(pb => pb.exercise.id === nb.exercise.id);
+        return {
+          ...nb,
+          collapsed: existing ? existing.collapsed : nb.collapsed
+        };
+      });
+    });
   }, [db, workoutId]);
 
   useEffect(() => { loadWorkout(); }, [loadWorkout]);
+
+  const handleAdjustDate = async (daysDelta: number) => {
+    if (!workout) return;
+    const currentDate = new Date(workout.started_at);
+    currentDate.setDate(currentDate.getDate() + daysDelta);
+    const newIsoString = currentDate.toISOString();
+
+    try {
+      await updateWorkoutStartedAt(db, workoutId, newIsoString);
+      setWorkout(prev => {
+        if (!prev) return null;
+        return { ...prev, started_at: newIsoString };
+      });
+    } catch (error) {
+      console.error("Päivämäärän päivitys epäonnistui:", error);
+    }
+  };
 
   const handleAddExercise = async (exercise: Exercise) => {
     setShowExercisePicker(false);
@@ -246,6 +275,49 @@ export default function WorkoutScreen() {
     );
   };
 
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString(locale === 'fi' ? 'fi-FI' : 'en-GB', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+  };
+
+  const dateInputRef = useRef<any>(null);
+
+  const handleWebDateChange = async (e: any) => {
+    if (!workout || !e.target.value) return;
+
+    // e.target.value "YYYY-MM-DD"
+    const selectedDate = new Date(e.target.value);
+    const currentDate = new Date(workout.started_at);
+
+    currentDate.setFullYear(selectedDate.getFullYear());
+    currentDate.setMonth(selectedDate.getMonth());
+    currentDate.setDate(selectedDate.getDate());
+
+    const newIsoString = currentDate.toISOString();
+
+    try {
+      await updateWorkoutStartedAt(db, workoutId, newIsoString);
+      setWorkout(prev => prev ? { ...prev, started_at: newIsoString } : null);
+    } catch (err) {
+      console.error("Kalenteripäivitys epäonnistui:", err);
+    }
+  };
+
+  // ISO -> "YYYY-MM-DD"
+  const inputDateValue = workout ? new Date(workout.started_at).toISOString().split('T')[0] : '';
+
+  const triggerDatePicker = () => {
+    if (dateInputRef.current) {
+      dateInputRef.current.click();
+      if (typeof dateInputRef.current.showPicker === 'function') {
+        dateInputRef.current.showPicker();
+      }
+    }
+  };
+
+
   return (
     <View style={styles.container}>
       {/* Timer Bar */}
@@ -270,8 +342,35 @@ export default function WorkoutScreen() {
         </View>
       </View>
 
-      {/* Exercise Blocks */}
-      <ScrollView style={styles.scroll}>
+      {/* Workout metadata and Exercise Blocks */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {workout && (
+          <View style={styles.dateEditRow}>
+            <Pressable
+              onPress={() => handleAdjustDate(-1)}
+              style={styles.dateBtn}
+            >
+              <Text style={styles.dateBtnText}>−</Text>
+            </Pressable>
+
+            <input
+              type="date"
+              value={inputDateValue}
+              onChange={handleWebDateChange}
+              style={webInputStyle}
+            />
+
+            <Pressable
+              onPress={() => handleAdjustDate(1)}
+              style={styles.dateBtn}
+            >
+              <Text style={styles.dateBtnText}>+</Text>
+            </Pressable>
+          </View>
+        )}
         {blocks.map((block, idx) => (
           <View key={block.exercise.id} style={styles.exerciseBlock}>
             <View style={styles.exerciseHeader}>
@@ -455,7 +554,51 @@ const styles = StyleSheet.create({
   activeBtn: { backgroundColor: colors.purple },
   timerBtnText: { color: colors.textPrimary, fontSize: 12, fontWeight: 'bold' },
   metronomeSection: { marginLeft: 8 },
-  scroll: { flex: 1, padding: 12 },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    flexDirection: 'column',
+  },
+  dateEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center', // Keskittää koko paketin
+    backgroundColor: colors.bgCard,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 16,
+  },
+  dateDisplayWrap: {
+    minWidth: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    position: 'relative',
+  },
+  dateDisplay: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  dateBtn: {
+    backgroundColor: colors.purpleDim,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateBtnText: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
   exerciseBlock: {
     marginBottom: 12,
     backgroundColor: colors.bgCard,
@@ -605,3 +748,24 @@ const styles = StyleSheet.create({
   },
   finishText: { color: colors.textPrimary, fontSize: 16, fontWeight: 'bold' },
 });
+
+const webInputStyle = {
+  border: 'none',
+  background: 'transparent',
+  outline: 'none',
+  WebkitAppearance: 'auto' as any,
+  appearance: 'auto' as const,
+  color: colors.textPrimary,
+  fontSize: '15px',
+  fontWeight: '600' as const,
+  fontFamily: 'sans-serif',
+  textAlign: 'center' as const,
+  padding: 0,
+  margin: 0,
+  height: '36px',
+  cursor: 'pointer',
+  width: '135px',
+  minWidth: '135px',
+  maxWidth: '135px',
+};
+

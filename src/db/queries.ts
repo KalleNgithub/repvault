@@ -77,10 +77,10 @@ export async function getWorkoutSummaries(db: DB, workoutIds: number[]): Promise
 export async function getWorkoutWithSets(db: DB, workoutId: number) {
   const workout = await db.getFirstAsync<Workout>('SELECT * FROM workouts WHERE id = ?', [workoutId]);
   const sets = await db.getAllAsync<WorkoutSet & { exercise_name: string }>(
-    `SELECT ws.*, e.name as exercise_name 
-     FROM workout_sets ws 
-     JOIN exercises e ON e.id = ws.exercise_id 
-     WHERE ws.workout_id = ? 
+    `SELECT ws.*, e.name as exercise_name
+     FROM workout_sets ws
+     JOIN exercises e ON e.id = ws.exercise_id
+     WHERE ws.workout_id = ?
      ORDER BY ws.id, ws.set_index`,
     [workoutId]
   );
@@ -199,3 +199,11 @@ export async function getExerciseHistory(
 
   return Array.from(grouped.values());
 }
+
+export async function updateWorkoutStartedAt(db: DB, workoutId: number, startedAt: string): Promise<void> {
+  await db.runAsync(
+    'UPDATE workouts SET started_at = ? WHERE id = ?',
+    [startedAt, workoutId]
+  );
+}
+
