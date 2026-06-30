@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useDatabase } from '../src/db/DatabaseProvider';
-import { createWorkout, getRecentWorkouts, deleteWorkout, getWorkoutSummaries, type WorkoutExerciseSummary } from '../src/db/queries';
+import { createWorkout, getRecentWorkouts, deleteWorkout, getWorkoutSummaries, type WorkoutExerciseSummary, copyWorkoutWithWeightsOnly } from '../src/db/queries';
 import { useI18n, formatDateLocale, translateExercise } from '../src/i18n';
 import { colors } from '../src/theme';
 import type { Workout } from '../src/types';
@@ -14,6 +14,7 @@ export default function HomeScreen() {
   const { t, locale } = useI18n();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [summaries, setSummaries] = useState<Map<number, WorkoutExerciseSummary[]>>(new Map());
+  const [isCopyMode, setIsCopyMode] = useState(false);
 
   const loadData = useCallback(async () => {
     const wks = await getRecentWorkouts(db);
@@ -38,21 +39,51 @@ export default function HomeScreen() {
     loadData();
   };
 
+  const handleSelectOldWorkout = async (sourceWorkoutId: number) => {
+    try {
+      await copyWorkoutWithWeightsOnly(db, sourceWorkoutId);
+      setIsCopyMode(false);
+      await loadData();
+    } catch (error) {
+      console.error("Treenin kopiointi epäonnistui:", error);
+    }
+  };
+
+
   return (
     <View style={styles.container}>
-      <Pressable style={styles.newButton} onPress={handleNewWorkout}>
-        <Text style={styles.newButtonText}>{t.newWorkout}</Text>
-      </Pressable>
+      <View style={styles.buttonRow}>
+        <Pressable
+          style={[styles.newButton, isCopyMode && styles.disabledBtn]}
+          onPress={handleNewWorkout}
+          disabled={isCopyMode}
+        >
+          <Text style={styles.newButtonText}>{t.newWorkout}</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.oldButton, isCopyMode && styles.activeOldBtn]}
+          onPress={() => setIsCopyMode(!isCopyMode)}
+        >
+          <Text style={[styles.oldButtonText, isCopyMode && styles.activeOldBtnText]}>
+            {isCopyMode ? t.cancel || 'Peruuta' : '+ Old workout'}
+          </Text>
+        </Pressable>
+      </View>
 
       <Text style={styles.sectionTitle}>{t.recent}</Text>
       <FlatList
         data={workouts}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.workoutItem}>
+          <View style={[styles.workoutItem, isCopyMode && styles.workoutItemCopyable]}>
             <Pressable
               style={styles.workoutContent}
-              onPress={() => router.push({ pathname: '/workout', params: { id: item.id.toString() } })}
+              onPress={() =>
+                isCopyMode
+                  ? handleSelectOldWorkout(item.id)
+                  : router.push({ pathname: '/workout', params: { id: item.id.toString() } })
+              }
             >
               <View style={styles.workoutHeader}>
                 <Text style={styles.workoutDate}>{formatDate(item.started_at)}</Text>
@@ -66,9 +97,14 @@ export default function HomeScreen() {
                 </Text>
               )}
             </Pressable>
-            <Pressable style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+            <Pressable
+              style={[styles.deleteBtn, isCopyMode && { opacity: 0 }]}
+              onPress={() => handleDelete(item.id)}
+              disabled={isCopyMode} // Estää vahinkopainallukset, vaikka nappi on näkymätön
+            >
               <Text style={styles.deleteText}>×</Text>
             </Pressable>
+
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>{t.noWorkouts}</Text>}
@@ -88,19 +124,45 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: colors.bg },
+  buttonRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   newButton: {
+    flex: 1,
     backgroundColor: colors.purple,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 24,
   },
   newButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold' },
+  oldButton: {
+    flex: 1,
+    backgroundColor: colors.purpleDim,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.purple
+  },
+  oldButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold' },
+  disabledBtn: { opacity: 0.3 },
+  activeOldBtn: {
+    backgroundColor: colors.purpleDim,
+    borderColor: colors.pink
+  },
+  activeOldBtnText: {
+    color: colors.pink
+  },
   sectionTitle: { color: colors.textSecondary, fontSize: 14, marginBottom: 8, textTransform: 'uppercase' },
   workoutItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingHorizontal: 4,
+  },
+  workoutItemCopyable: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.purple,
+    backgroundColor: colors.purpleDim,
     borderBottomColor: colors.border,
   },
   workoutContent: {
@@ -131,4 +193,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navButtonText: { color: colors.textSecondary, fontSize: 16 },
+  copyTitleHint: { color: colors.accent, fontWeight: 'bold' },
 });

@@ -207,3 +207,20 @@ export async function updateWorkoutStartedAt(db: DB, workoutId: number, startedA
   );
 }
 
+export async function copyWorkoutWithWeightsOnly(db: any, sourceWorkoutId: number): Promise<Workout> {
+  const newWorkout = await createWorkout(db);
+
+  const oldSets = await db.getAllAsync(
+    'SELECT exercise_id, set_index, weight FROM workout_sets WHERE workout_id = ? ORDER BY id ASC',
+    [sourceWorkoutId]
+  );
+
+  for (const set of oldSets) {
+    await db.runAsync(
+      'INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [newWorkout.id, set.exercise_id, set.set_index, null, set.weight, null]
+    );
+  }
+
+  return newWorkout;
+}
