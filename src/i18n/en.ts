@@ -4,6 +4,7 @@ export const en = {
 
   // Home
   newWorkout: '+ New Workout',
+  oldWorkOut: '+ Old Workout',
   recent: 'Recent',
   noWorkouts: 'No workouts yet',
   done: 'Done',

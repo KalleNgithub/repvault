@@ -6,6 +6,7 @@ export const fi: TranslationKeys = {
 
   // Home
   newWorkout: '+ Uusi harjoitus',
+  oldWorkOut: '+ Vanha harjoitus',
   recent: 'Viimeisimmät',
   noWorkouts: 'Ei harjoituksia vielä',
   done: 'Valmis',

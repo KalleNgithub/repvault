@@ -14,6 +14,8 @@ import {
   finishWorkout,
   type WorkoutHistory,
   updateWorkoutStartedAt,
+  saveWorkoutTimer,
+  getWorkoutTimer,
 } from '../src/db/queries';
 import type { Exercise, Workout, WorkoutSet } from '../src/types';
 import { useStopwatch, formatTime } from '../src/hooks/useStopwatch';
@@ -68,35 +70,80 @@ export default function WorkoutScreen() {
 
   const loadWorkout = useCallback(async () => {
     const { workout, sets } = await getWorkoutWithSets(db, workoutId);
+    setWorkout(workout);
+
     const exercises = await getAllExercises(db);
     setAllExercises(exercises);
 
     const exerciseMap = new Map<number, { exercise: Exercise; sets: WorkoutSet[] }>();
-    for (const s of sets) {
+    GROUP_SETS_BY_EXERCISE: for (const s of sets) {
       if (!exerciseMap.has(s.exercise_id)) {
-        const ex = exercises.find(e => e.id === s.exercise_id)!;
+        const ex = exercises.find(e => e.id === s.exercise_id);
+
+        if (!ex) {
+          console.error(`Tietokantavirhe: Liikettä ID:llä ${s.exercise_id} ei löydy.`);
+          continue GROUP_SETS_BY_EXERCISE;
+        }
+
         exerciseMap.set(s.exercise_id, { exercise: ex, sets: [] });
       }
       exerciseMap.get(s.exercise_id)!.sets.push(s);
     }
 
-    const newBlocks: ExerciseBlock[] = [];
-    for (const [exId, { exercise, sets: exSets }] of exerciseMap) {
-      const lastSets = await getLastSetsForExercise(db, exId, workoutId);
-      const history = await getExerciseHistory(db, exId, workoutId, 3);
-      newBlocks.push({ exercise, sets: exSets, lastSets, history, collapsed: false });
+    LOAD_EXERCISE_BLOCKS: {
+      if (exerciseMap.size == 0) {
+        break LOAD_EXERCISE_BLOCKS;
+      }
+      const newBlocks: ExerciseBlock[] = [];
+      for (const [exId, { exercise, sets: exSets }] of exerciseMap) {
+        const lastSets = await getLastSetsForExercise(db, exId, workoutId);
+        const history = await getExerciseHistory(db, exId, workoutId, 3);
+        newBlocks.push({ exercise, sets: exSets, lastSets, history, collapsed: false });
+      }
+
+      setBlocks(prevBlocks => {
+        return newBlocks.map(nb => {
+          const existing = prevBlocks.find(pb => pb.exercise.id === nb.exercise.id);
+          return {
+            ...nb,
+            collapsed: existing ? existing.collapsed : nb.collapsed
+          };
+        });
+      });
     }
 
-    setWorkout(workout)
-    setBlocks(prevBlocks => {
-      return newBlocks.map(nb => {
-        const existing = prevBlocks.find(pb => pb.exercise.id === nb.exercise.id);
-        return {
-          ...nb,
-          collapsed: existing ? existing.collapsed : nb.collapsed
-        };
-      });
-    });
+    LOAD_WORKOUT_TIMER: {
+      try {
+        const savedTimer = await getWorkoutTimer(db, workoutId);
+        if (!savedTimer) {
+          stopwatch.reset();
+          break LOAD_WORKOUT_TIMER;
+        }
+
+        const now = Date.now();
+        const updatedAt = new Date(savedTimer.updated_at).getTime();
+        const backgroundElapsedMs = now - updatedAt;
+
+        const isRunning = savedTimer.is_running === 1;
+        let elapsed = savedTimer.total_elapsed_ms;
+        let lapElapsed = savedTimer.lap_elapsed_ms;
+
+        if (isRunning) {
+          elapsed += backgroundElapsedMs;
+          lapElapsed += backgroundElapsedMs;
+        }
+
+        const countedLaps: number[] = [];
+        if (elapsed > 0 && elapsed !== lapElapsed) {
+          const previousLapEnded = elapsed - lapElapsed;
+          countedLaps.push(previousLapEnded);
+        }
+
+        stopwatch.setTimer(elapsed, isRunning, countedLaps,);
+      } catch (error) {
+        console.error("Virhe sekuntikellon alustuksessa:", error);
+      }
+    }
   }, [db, workoutId]);
 
   useEffect(() => { loadWorkout(); }, [loadWorkout]);
@@ -233,9 +280,15 @@ export default function WorkoutScreen() {
   };
 
   const handleFinish = async () => {
+    const now = new Date().toISOString();
+
+    stopwatch.stop();
+    await saveWorkoutTimer(db, workoutId, 'STOP', false, stopwatch.elapsed, stopwatch.lapTime, now);
+
     await finishWorkout(db, workoutId);
     router.back();
   };
+
 
   // Render history row: sets from past workouts, grouped with | separator
   const renderHistory = (history: WorkoutHistory[]) => {
@@ -275,15 +328,6 @@ export default function WorkoutScreen() {
     );
   };
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString(locale === 'fi' ? 'fi-FI' : 'en-GB', {
-      day: 'numeric', month: 'short', year: 'numeric',
-    });
-  };
-
-  const dateInputRef = useRef<any>(null);
-
   const handleWebDateChange = async (e: any) => {
     if (!workout || !e.target.value) return;
 
@@ -308,14 +352,37 @@ export default function WorkoutScreen() {
   // ISO -> "YYYY-MM-DD"
   const inputDateValue = workout ? new Date(workout.started_at).toISOString().split('T')[0] : '';
 
-  const triggerDatePicker = () => {
-    if (dateInputRef.current) {
-      dateInputRef.current.click();
-      if (typeof dateInputRef.current.showPicker === 'function') {
-        dateInputRef.current.showPicker();
-      }
-    }
-  };
+const handleStart = async () => {
+  const now = new Date().toISOString();
+
+  stopwatch.start();
+  await saveWorkoutTimer(db, workoutId, 'START', true, stopwatch.elapsed, stopwatch.lapTime, now);
+};
+
+const handleStop = async () => {
+  const now = new Date().toISOString();
+  const newElapsed = stopwatch.elapsed;
+  const newLap = stopwatch.lapTime;
+
+  stopwatch.stop();
+  await saveWorkoutTimer(db, workoutId, 'STOP', false, newElapsed, newLap, now);
+};
+
+const handleLap = async () => {
+  const now = new Date().toISOString();
+  const newElapsed = stopwatch.elapsed;
+
+  stopwatch.lap();
+  await saveWorkoutTimer(db, workoutId, 'LAP', true, newElapsed, 0, now);
+};
+
+const handleReset = async () => {
+  const now = new Date().toISOString();
+
+  stopwatch.reset();
+  await saveWorkoutTimer(db, workoutId, 'RESET', false, 0, 0, now);
+};
+
 
 
   return (
@@ -328,10 +395,10 @@ export default function WorkoutScreen() {
           <Text style={styles.totalTime}>{formatTime(stopwatch.elapsed)}</Text>
         </View>
         <View style={styles.timerButtons}>
-          <Pressable onPress={stopwatch.running ? stopwatch.lap : stopwatch.start} style={styles.timerBtn}>
+          <Pressable onPress={stopwatch.running ? handleLap : handleStart} style={styles.timerBtn}>
             <Text style={styles.timerBtnText}>{stopwatch.running ? t.lap : t.start}</Text>
           </Pressable>
-          <Pressable onPress={stopwatch.running ? stopwatch.stop : stopwatch.reset} style={styles.timerBtn}>
+          <Pressable onPress={stopwatch.running ? handleStop : handleReset} style={styles.timerBtn}>
             <Text style={styles.timerBtnText}>{stopwatch.running ? t.stop : t.reset}</Text>
           </Pressable>
         </View>
@@ -550,6 +617,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
+    minWidth: 85,
+    alignItems: 'center',
   },
   activeBtn: { backgroundColor: colors.purple },
   timerBtnText: { color: colors.textPrimary, fontSize: 12, fontWeight: 'bold' },

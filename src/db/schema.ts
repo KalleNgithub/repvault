@@ -34,6 +34,17 @@ export async function initDatabase(db: DB): Promise<void> {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS workout_timers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workout_id INTEGER UNIQUE NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+      last_action TEXT NOT NULL CHECK(last_action IN ('START', 'STOP', 'LAP', 'RESET')),
+      is_running INTEGER NOT NULL CHECK(is_running IN (0, 1)),
+      total_elapsed_ms INTEGER NOT NULL DEFAULT 0,
+      lap_elapsed_ms INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
+
     CREATE INDEX IF NOT EXISTS idx_sets_workout ON workout_sets(workout_id);
     CREATE INDEX IF NOT EXISTS idx_sets_exercise ON workout_sets(exercise_id);
   `);

@@ -7,6 +7,14 @@ export function useStopwatch() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
 
+  const setTimer = useCallback((elapsed: number, running: boolean, laps: number[] = []) => {
+    startTimeRef.current = Date.now() - elapsed;
+
+    setLaps(laps);
+    setElapsed(elapsed);
+    setRunning(running);
+  }, []);
+
   const start = useCallback(() => {
     if (running) return;
     startTimeRef.current = Date.now() - elapsed;
@@ -44,7 +52,7 @@ export function useStopwatch() {
     };
   }, [running]);
 
-  return { elapsed, lapTime, running, laps, start, stop, reset, lap };
+  return { elapsed, lapTime, running, laps, start, stop, reset, lap, setTimer };
 }
 
 export function formatTime(ms: number): string {

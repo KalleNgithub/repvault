@@ -65,8 +65,10 @@ export default function HomeScreen() {
           style={[styles.oldButton, isCopyMode && styles.activeOldBtn]}
           onPress={() => setIsCopyMode(!isCopyMode)}
         >
-          <Text style={[styles.oldButtonText, isCopyMode && styles.activeOldBtnText]}>
-            {isCopyMode ? t.cancel || 'Peruuta' : '+ Old workout'}
+          <Text style={[styles.oldButtonText, isCopyMode && styles.activeOldBtnText]}
+            numberOfLines={1}
+            ellipsizeMode="clip">
+            {isCopyMode ? t.cancel : t.oldWorkOut}
           </Text>
         </Pressable>
       </View>
@@ -142,7 +144,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.purple
   },
-  oldButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold' },
+  oldButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold',  },
   disabledBtn: { opacity: 0.3 },
   activeOldBtn: {
     backgroundColor: colors.purpleDim,

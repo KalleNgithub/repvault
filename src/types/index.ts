@@ -28,3 +28,13 @@ export interface ExerciseBlock {
   sets: WorkoutSet[];
   lastSets: WorkoutSet[]; // from previous workout with this exercise
 }
+
+export interface WorkoutTimer {
+  id: number;
+  workout_id: number;
+  last_action: 'START' | 'STOP' | 'LAP' | 'RESET';
+  is_running: number; // 0 tai 1
+  total_elapsed_ms: number;
+  lap_elapsed_ms: number;
+  updated_at: string;
+}

@@ -1,5 +1,5 @@
 import type { DB } from './interface';
-import type { Exercise, Workout, WorkoutSet } from '../types';
+import type { Exercise, Workout, WorkoutSet, WorkoutTimer } from '../types';
 
 // --- Settings ---
 
@@ -207,7 +207,7 @@ export async function updateWorkoutStartedAt(db: DB, workoutId: number, startedA
   );
 }
 
-export async function copyWorkoutWithWeightsOnly(db: any, sourceWorkoutId: number): Promise<Workout> {
+export async function copyWorkoutWithWeightsOnly(db: DB, sourceWorkoutId: number): Promise<Workout> {
   const newWorkout = await createWorkout(db);
 
   const oldSets = await db.getAllAsync(
@@ -223,4 +223,36 @@ export async function copyWorkoutWithWeightsOnly(db: any, sourceWorkoutId: numbe
   }
 
   return newWorkout;
+}
+
+export async function getWorkoutTimer(db: DB, workoutId: number): Promise<WorkoutTimer | null> {
+  const result = await db.getFirstAsync<WorkoutTimer>(
+    'SELECT * FROM workout_timers WHERE workout_id = ?',
+    [workoutId]
+  );
+  return result || null;
+}
+
+export async function saveWorkoutTimer(
+  db: DB,
+  workoutId: number,
+  lastAction: 'START' | 'STOP' | 'LAP' | 'RESET',
+  isRunning: boolean,
+  totalElapsedMs: number,
+  lapElapsedMs: number,
+  updatedAt: string
+): Promise<void> {
+  await db.runAsync(
+    `INSERT OR REPLACE INTO workout_timers (
+      workout_id, last_action, is_running, total_elapsed_ms, lap_elapsed_ms, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      workoutId,
+      lastAction,
+      isRunning ? 1 : 0,
+      totalElapsedMs,
+      lapElapsedMs,
+      updatedAt
+    ]
+  );
 }

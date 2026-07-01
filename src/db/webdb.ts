@@ -10,8 +10,8 @@ interface TableRow {
 }
 
 const DB_NAME = 'workout-log';
-const DB_VERSION = 2;
-const STORES = ['exercises', 'workouts', 'workout_sets', 'settings'] as const;
+const DB_VERSION = 3;
+const STORES = ['exercises', 'workouts', 'workout_sets', 'settings', 'workout_timers'] as const;
 
 let autoId = Date.now();
 
@@ -115,7 +115,9 @@ class WebDB implements DB {
       }
     });
 
-    const upsert = /ON\s+CONFLICT\s*\(\s*\w+\s*\)\s*DO\s+UPDATE/i.test(sql);
+    // Korvaa vanha upsert-rivi tällä:
+    const upsert = /ON\s+CONFLICT\s*\(\s*\w+\s*\)\s*DO\s+UPDATE/i.test(sql) || /INSERT\s+OR\s+REPLACE/i.test(sql);
+
     const ignoreConflict = /INSERT\s+OR\s+IGNORE/i.test(sql);
 
     // Ensure workouts have defaults for required fields
@@ -124,6 +126,14 @@ class WebDB implements DB {
       if (!('finished_at' in row)) row.finished_at = null;
       if (!('notes' in row)) row.notes = null;
       if (!('device' in row)) row.device = null;
+    }
+
+    if (table === 'workout_timers' && upsert) {
+      const allTimers = await this.idb.getAll('workout_timers');
+      const existingTimer = allTimers.find(t => t.workout_id === row.workout_id);
+      if (existingTimer) {
+        row.id = existingTimer.id; // Kiinnitetään vanha ID, jotta .put() ylikirjoittaa sen
+      }
     }
 
     if (upsert) {
