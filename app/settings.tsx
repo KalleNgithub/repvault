@@ -197,7 +197,10 @@ export default function SettingsScreen() {
 
       {/* Checkbox picker */}
       {exportMode === 'pick' && (
-        <View style={styles.pickList}>
+        <ScrollView
+          style={styles.pickList}
+          nestedScrollEnabled={true}
+        >
           {workouts.map(w => (
             <Pressable
               key={w.id}
@@ -223,7 +226,7 @@ export default function SettingsScreen() {
               {locale === 'fi' ? 'Ei treenejä' : 'No workouts'}
             </Text>
           )}
-        </View>
+        </ScrollView>
       )}
 
       <Pressable style={styles.dataBtn} onPress={handleExport}>
@@ -344,6 +347,8 @@ const styles = StyleSheet.create({
   pickList: {
     marginBottom: 12,
     maxHeight: 240,
+    overflow: 'hidden', // Estää elementtejä valumasta rajan yli
+    borderRadius: 6,    // Valinnainen: pitää kulmat siistinä jos taustavärit näkyvät
   },
   pickItem: {
     flexDirection: 'row',
