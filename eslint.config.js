@@ -39,13 +39,15 @@ export default [
     },
   },
   {
-    files: ['scripts/**/*.js'],
+    files: ['scripts/**/*.js', 'scripts/**/*.cjs', '**/*.cjs'],
     languageOptions: {
       globals: {
         __dirname: 'readonly',
+        __filename: 'readonly', // Lisätty varmuuden vuoksi myös tämä Node-globaali
         require: 'readonly',
         module: 'readonly',
         process: 'readonly',
+        exports: 'readonly', // Lisätty valmius CommonJS exporteille
       },
     },
   },
