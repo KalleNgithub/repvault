@@ -14,22 +14,7 @@ export function useMetronome(bpm = 60) {
   const lastStopIdRef = useRef<number>(0);
 
   const playingRef = useRef(false);
-
-  const stop = useCallback(() => {
-    lastStopIdRef.current = Date.now();
-    setPlaying(false);
-    playingRef.current = false;
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-
-    if (Platform.OS === 'web') {
-      window.removeEventListener('touchstart', stop, { capture: true });
-      window.removeEventListener('mousedown', stop, { capture: true });
-    }
-  }, []);
+  const stopRef = useRef<() => void>(() => {});
 
   const playClick = useCallback(() => {
     if (Platform.OS !== 'web') return;
@@ -61,6 +46,27 @@ export function useMetronome(bpm = 60) {
     }, 100);
   }, []);
 
+  const stop = useCallback(() => {
+    lastStopIdRef.current = Date.now();
+    setPlaying(false);
+    playingRef.current = false;
+
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (Platform.OS === 'web') {
+      window.removeEventListener('touchstart', stopRef.current, { capture: true });
+      window.removeEventListener('mousedown', stopRef.current, { capture: true });
+    }
+  }, []);
+
+  // Keep ref in sync so event listeners can access latest stop
+  useEffect(() => {
+    stopRef.current = stop;
+  }, [stop]);
+
   const start = useCallback(() => {
     if (playingRef.current) return;
 
@@ -75,12 +81,12 @@ export function useMetronome(bpm = 60) {
     if (Platform.OS === 'web') {
       setTimeout(() => {
         if (playingRef.current) {
-          window.addEventListener('touchstart', stop, { capture: true, once: true });
-          window.addEventListener('mousedown', stop, { capture: true, once: true });
+          window.addEventListener('touchstart', stopRef.current, { capture: true, once: true });
+          window.addEventListener('mousedown', stopRef.current, { capture: true, once: true });
         }
       }, 50); // Pieni viive, jotta käynnistysklikkaus itse ei sammuta metronomia heti
     }
-  }, [bpm, playClick, stop]);
+  }, [bpm, playClick]);
 
   const toggle = useCallback(() => {
     // Same touch down/up
@@ -107,8 +113,8 @@ export function useMetronome(bpm = 60) {
       // Jos komponentti tuhoutuu (esim. harjoitus valmistuu ja näkymä vaihtuu), pakotetaan sammutus ja siivous
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (audioContextRef.current) audioContextRef.current.close();
-      window.removeEventListener('touchstart', stop, { capture: true });
-      window.removeEventListener('mousedown', stop, { capture: true });
+      window.removeEventListener('touchstart', stopRef.current, { capture: true });
+      window.removeEventListener('mousedown', stopRef.current, { capture: true });
     };
   }, [stop]);
 

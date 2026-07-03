@@ -1,6 +1,5 @@
 import type { DB } from './interface';
-import type { Exercise, Workout, WorkoutSet } from '../types';
-import { getSetting } from './queries';
+import type { WorkoutSet } from '../types';
 
 // Export format v1 — uses exercise names and ordered blocks
 export interface ExportData {
@@ -31,21 +30,10 @@ interface ExportSet {
 }
 
 export async function exportData(db: DB, workoutIds?: number[]): Promise<ExportData> {
-  const deviceName = await getSetting(db, 'device_name');
-  const exercises = await db.getAllAsync<Exercise>('SELECT * FROM exercises ORDER BY id');
-
-  let workouts: Workout[];
-  if (workoutIds && workoutIds.length > 0) {
-    const placeholders = workoutIds.map(() => '?').join(',');
-    workouts = await db.getAllAsync<Workout>(
-      `SELECT * FROM workouts WHERE id IN (${placeholders}) ORDER BY started_at`,
-      workoutIds
-    );
-  } else {
-    workouts = await db.getAllAsync<Workout>('SELECT * FROM workouts ORDER BY started_at');
-  }
-
-  const allSets = await db.getAllAsync<WorkoutSet>('SELECT * FROM workout_sets ORDER BY workout_id, id');
+  const deviceName = await db.getSetting('device_name');
+  const exercises = await db.getAllExercises();
+  const workouts = await db.getWorkouts(workoutIds);
+  const allSets = await db.getAllSets();
 
   const exerciseMap = new Map<number, string>();
   for (const e of exercises) {
@@ -65,8 +53,8 @@ export async function exportData(db: DB, workoutIds?: number[]): Promise<ExportD
     version: 1,
     exported_at: new Date().toISOString(),
     exported_from: deviceName,
-    exercises: exercises.map(e => e.name),
-    workouts: workouts.map(w => {
+    exercises: exercises.map((e) => e.name),
+    workouts: workouts.map((w) => {
       const sets = workoutSetsMap.get(w.id) ?? [];
       // Build blocks: consecutive sets with same exercise_id form a block
       const blocks: ExportBlock[] = [];
@@ -117,7 +105,7 @@ export async function importData(db: DB, data: ExportData): Promise<ImportResult
   };
 
   // Resolve exercise names → IDs (create missing ones)
-  const existingExercises = await db.getAllAsync<Exercise>('SELECT * FROM exercises');
+  const existingExercises = await db.getAllExercises();
   const nameToId = new Map<string, number>();
   for (const e of existingExercises) {
     nameToId.set(e.name, e.id);
@@ -133,18 +121,15 @@ export async function importData(db: DB, data: ExportData): Promise<ImportResult
 
   for (const name of allNames) {
     if (!nameToId.has(name)) {
-      const res = await db.runAsync(
-        'INSERT INTO exercises (name, created_at) VALUES (?, ?)',
-        [name, new Date().toISOString()]
-      );
-      nameToId.set(name, res.lastInsertRowId);
+      const exercise = await db.addExercise(name);
+      nameToId.set(name, exercise.id);
       result.exercisesCreated++;
     }
   }
 
   // Import workouts — skip if exact started_at already exists
-  const existingWorkouts = await db.getAllAsync<Workout>('SELECT * FROM workouts');
-  const existingStartTimes = new Set(existingWorkouts.map(w => w.started_at));
+  const existingWorkouts = await db.getWorkouts();
+  const existingStartTimes = new Set(existingWorkouts.map((w) => w.started_at));
 
   for (const w of data.workouts) {
     if (existingStartTimes.has(w.started_at)) {
@@ -155,11 +140,7 @@ export async function importData(db: DB, data: ExportData): Promise<ImportResult
     // Resolve device: per-workout device overrides, else exported_from
     const device = w.device ?? data.exported_from ?? null;
 
-    const wRes = await db.runAsync(
-      'INSERT INTO workouts (started_at, finished_at, notes, device) VALUES (?, ?, ?, ?)',
-      [w.started_at, w.finished_at, w.notes, device]
-    );
-    const workoutId = wRes.lastInsertRowId;
+    const workoutId = await db.insertWorkoutRaw(w.started_at, w.finished_at, w.notes, device);
     result.workoutsImported++;
 
     let setIndex = 0;
@@ -167,10 +148,7 @@ export async function importData(db: DB, data: ExportData): Promise<ImportResult
       const exerciseId = nameToId.get(block.exercise_name);
       if (!exerciseId) continue;
       for (const s of block.sets) {
-        await db.runAsync(
-          'INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [workoutId, exerciseId, setIndex, s.reps, s.weight, s.completed_at]
-        );
+        await db.insertSetRaw(workoutId, exerciseId, setIndex, s.reps, s.weight, s.completed_at);
         setIndex++;
         result.setsImported++;
       }

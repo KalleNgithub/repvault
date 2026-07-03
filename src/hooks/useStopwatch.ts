@@ -32,7 +32,7 @@ export function useStopwatch() {
   }, []);
 
   const lap = useCallback(() => {
-    setLaps(prev => [...prev, elapsed]);
+    setLaps((prev) => [...prev, elapsed]);
   }, [elapsed]);
 
   // Get time since last lap (or since start if no laps)

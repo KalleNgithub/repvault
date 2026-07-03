@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { translateExercise, useI18n } from '../src/i18n';
 import { useDatabase } from '../src/db/DatabaseProvider';
 import { exportData, importData, ExportData } from '../src/db/importExport';
-import { getSetting, setSetting, getRecentWorkouts, WorkoutExerciseSummary, getWorkoutSummaries } from '../src/db/queries';
 import type { Workout } from '../src/types';
 import { colors } from '../src/theme';
+import { WorkoutExerciseSummary } from '../src/db/interface';
 
 type ExportMode = 'last' | 'all' | 'pick';
 
@@ -24,28 +24,29 @@ export default function SettingsScreen() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    getSetting(db, 'device_name').then(v => { if (v) setDeviceName(v); });
-    getRecentWorkouts(db, 100).then(setWorkouts);
+    db.getSetting('device_name').then((v) => {
+      if (v) setDeviceName(v);
+    });
+    db.getRecentWorkouts(100).then(setWorkouts);
   }, [db]);
 
   useEffect(() => {
     if (workouts.length > 0) {
-      getWorkoutSummaries(db, workouts.map(w => w.id)).then(setSummaries);
+      db.getWorkoutSummaries(workouts.map((w) => w.id)).then(setSummaries);
     }
   }, [db, workouts]);
-
 
   const saveDeviceName = useCallback(async () => {
     const trimmed = deviceName.trim();
     if (trimmed) {
-      await setSetting(db, 'device_name', trimmed);
+      await db.setSetting('device_name', trimmed);
       setDeviceSaved(true);
       setTimeout(() => setDeviceSaved(false), 2000);
     }
   }, [db, deviceName]);
 
   const toggleWorkout = (id: number) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -56,7 +57,7 @@ export default function SettingsScreen() {
   const getExportIds = (): number[] | undefined => {
     if (exportMode === 'all') return undefined;
     if (exportMode === 'last') {
-      return workouts.slice(0, lastN).map(w => w.id);
+      return workouts.slice(0, lastN).map((w) => w.id);
     }
     return Array.from(selected);
   };
@@ -101,11 +102,13 @@ export default function SettingsScreen() {
           const result = await importData(db, data);
           setStatus(
             `✓ Imported ${result.workoutsImported} workout${result.workoutsImported !== 1 ? 's' : ''}, ` +
-            `${result.setsImported} sets, ${result.exercisesCreated} new exercises` +
-            (result.skippedDuplicateWorkouts > 0 ? ` (${result.skippedDuplicateWorkouts} skipped)` : '')
+              `${result.setsImported} sets, ${result.exercisesCreated} new exercises` +
+              (result.skippedDuplicateWorkouts > 0
+                ? ` (${result.skippedDuplicateWorkouts} skipped)`
+                : ''),
           );
           // Refresh workout list
-          getRecentWorkouts(db, 100).then(setWorkouts);
+          db.getRecentWorkouts(100).then(setWorkouts);
         };
         input.click();
       }
@@ -117,7 +120,9 @@ export default function SettingsScreen() {
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString(locale === 'fi' ? 'fi-FI' : 'en-GB', {
-      day: 'numeric', month: 'short', year: 'numeric',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
     });
   };
 
@@ -167,16 +172,24 @@ export default function SettingsScreen() {
 
       {/* Mode selector */}
       <View style={styles.modeRow}>
-        {(['last', 'all', 'pick'] as ExportMode[]).map(mode => (
+        {(['last', 'all', 'pick'] as ExportMode[]).map((mode) => (
           <Pressable
             key={mode}
             style={[styles.modeBtn, exportMode === mode && styles.modeBtnActive]}
             onPress={() => setExportMode(mode)}
           >
             <Text style={[styles.modeBtnText, exportMode === mode && styles.modeBtnTextActive]}>
-              {mode === 'last' ? (locale === 'fi' ? `Viim. ${lastN}` : `Last ${lastN}`)
-                : mode === 'all' ? (locale === 'fi' ? 'Kaikki' : 'All')
-                : (locale === 'fi' ? 'Valitse' : 'Pick')}
+              {mode === 'last'
+                ? locale === 'fi'
+                  ? `Viim. ${lastN}`
+                  : `Last ${lastN}`
+                : mode === 'all'
+                  ? locale === 'fi'
+                    ? 'Kaikki'
+                    : 'All'
+                  : locale === 'fi'
+                    ? 'Valitse'
+                    : 'Pick'}
             </Text>
           </Pressable>
         ))}
@@ -185,11 +198,14 @@ export default function SettingsScreen() {
       {/* Last N controls */}
       {exportMode === 'last' && (
         <View style={styles.lastNRow}>
-          <Pressable style={styles.incBtn} onPress={() => setLastN(n => Math.max(1, n - 1))}>
+          <Pressable style={styles.incBtn} onPress={() => setLastN((n) => Math.max(1, n - 1))}>
             <Text style={styles.incBtnText}>−</Text>
           </Pressable>
           <Text style={styles.lastNValue}>{lastN}</Text>
-          <Pressable style={styles.incBtn} onPress={() => setLastN(n => Math.min(n + 1, workouts.length))}>
+          <Pressable
+            style={styles.incBtn}
+            onPress={() => setLastN((n) => Math.min(n + 1, workouts.length))}
+          >
             <Text style={styles.incBtnText}>+</Text>
           </Pressable>
         </View>
@@ -197,21 +213,18 @@ export default function SettingsScreen() {
 
       {/* Checkbox picker */}
       {exportMode === 'pick' && (
-        <View style={styles.pickList}>
-          {workouts.map(w => (
-            <Pressable
-              key={w.id}
-              style={styles.pickItem}
-              onPress={() => toggleWorkout(w.id)}
-            >
-              <Text style={styles.pickCheckbox}>
-                {selected.has(w.id) ? '☑' : '☐'}
-              </Text>
+        <ScrollView style={styles.pickList} nestedScrollEnabled={true}>
+          {workouts.map((w) => (
+            <Pressable key={w.id} style={styles.pickItem} onPress={() => toggleWorkout(w.id)}>
+              <Text style={styles.pickCheckbox}>{selected.has(w.id) ? '☑' : '☐'}</Text>
               <View style={styles.pickContainer}>
                 <Text style={styles.pickDate}>{formatDate(w.started_at)}</Text>
                 {summaries.get(w.id) && summaries.get(w.id)!.length > 0 && (
                   <Text style={styles.workoutPreview} numberOfLines={1}>
-                    {summaries.get(w.id)!.map(s => `${s.set_count}× ${translateExercise(s.exercise_name, locale)}`).join(', ')}
+                    {summaries
+                      .get(w.id)!
+                      .map((s) => `${s.set_count}× ${translateExercise(s.exercise_name, locale)}`)
+                      .join(', ')}
                   </Text>
                 )}
               </View>
@@ -219,11 +232,9 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
           {workouts.length === 0 && (
-            <Text style={styles.emptyText}>
-              {locale === 'fi' ? 'Ei treenejä' : 'No workouts'}
-            </Text>
+            <Text style={styles.emptyText}>{locale === 'fi' ? 'Ei treenejä' : 'No workouts'}</Text>
           )}
-        </View>
+        </ScrollView>
       )}
 
       <Pressable style={styles.dataBtn} onPress={handleExport}>
@@ -344,6 +355,8 @@ const styles = StyleSheet.create({
   pickList: {
     marginBottom: 12,
     maxHeight: 240,
+    overflow: 'hidden', // Estää elementtejä valumasta rajan yli
+    borderRadius: 6, // Valinnainen: pitää kulmat siistinä jos taustavärit näkyvät
   },
   pickItem: {
     flexDirection: 'row',

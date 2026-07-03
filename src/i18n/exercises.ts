@@ -1,18 +1,16 @@
 // Display-time translations for seeded exercise names
 // User-created exercises are shown as-is
 
-import type { TranslationKeys } from './en';
-
 type ExerciseTranslations = Record<string, string>;
 
 const exercisesFi: ExerciseTranslations = {
-  'Squat': 'Kyykky',
+  Squat: 'Kyykky',
   'Bench Press': 'Penkkipunnerrus',
-  'Deadlift': 'Maastaveto',
+  Deadlift: 'Maastaveto',
   'Overhead Press': 'Pystypunnerrus',
   'Barbell Row': 'Kulmasoutu',
   'Pull-up': 'Leuanveto',
-  'Dip': 'Dippi',
+  Dip: 'Dippi',
   'Leg Press': 'Jalkaprässi',
   'Romanian Deadlift': 'Romanialainen maastaveto',
   'Incline Bench Press': 'Vinopenkkipunnerrus',
@@ -25,10 +23,10 @@ const exercisesFi: ExerciseTranslations = {
   'Tricep Extension': 'Ojentajapunnerrus',
   'Face Pull': 'Face pull',
   'Calf Raise': 'Pohjenosto',
-  'Plank': 'Lankku',
+  Plank: 'Lankku',
   'Belt Squat': 'Vyökyykky',
   'Upright Row': 'Pystysoutu',
-  'Shrugs': 'Olankohautus',
+  Shrugs: 'Olankohautus',
 };
 
 const exerciseTranslations: Record<string, ExerciseTranslations> = {

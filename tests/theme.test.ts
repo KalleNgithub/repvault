@@ -4,7 +4,7 @@ describe('theme colors', () => {
   const hexPattern = /^#[0-9a-fA-F]{6}$/;
 
   it('all color values are valid 6-digit hex', () => {
-    for (const [key, value] of Object.entries(colors)) {
+    for (const value of Object.values(colors)) {
       expect(value).toMatch(hexPattern);
     }
   });

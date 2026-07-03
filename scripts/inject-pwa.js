@@ -33,7 +33,7 @@ html = html.replace('</body>', swScript + '\n  </body>');
 // Update viewport for PWA
 html = html.replace(
   'content="width=device-width, initial-scale=1, shrink-to-fit=no"',
-  'content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"'
+  'content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"',
 );
 
 fs.writeFileSync(indexPath, html);

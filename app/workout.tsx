@@ -1,26 +1,14 @@
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useDatabase } from '../src/db/DatabaseProvider';
 import { useI18n, translateExercise } from '../src/i18n';
-import {
-  getAllExercises,
-  addSet,
-  updateSet,
-  deleteSet,
-  getLastSetsForExercise,
-  getExerciseHistory,
-  getWorkoutWithSets,
-  finishWorkout,
-  type WorkoutHistory,
-  updateWorkoutStartedAt,
-  saveWorkoutTimer,
-  getWorkoutTimer,
-} from '../src/db/queries';
+
 import type { Exercise, Workout, WorkoutSet } from '../src/types';
 import { useStopwatch, formatTime } from '../src/hooks/useStopwatch';
 import { useMetronome } from '../src/hooks/useMetronome';
 import { colors } from '../src/theme';
+import { WorkoutHistory } from '../src/db/interface';
 
 interface ExerciseBlock {
   exercise: Exercise;
@@ -69,16 +57,16 @@ export default function WorkoutScreen() {
   const [editValue, setEditValue] = useState('');
 
   const loadWorkout = useCallback(async () => {
-    const { workout, sets } = await getWorkoutWithSets(db, workoutId);
+    const { workout, sets } = await db.getWorkoutWithSets(workoutId);
     setWorkout(workout);
 
-    const exercises = await getAllExercises(db);
+    const exercises = await db.getAllExercises();
     setAllExercises(exercises);
 
     const exerciseMap = new Map<number, { exercise: Exercise; sets: WorkoutSet[] }>();
     GROUP_SETS_BY_EXERCISE: for (const s of sets) {
       if (!exerciseMap.has(s.exercise_id)) {
-        const ex = exercises.find(e => e.id === s.exercise_id);
+        const ex = exercises.find((e) => e.id === s.exercise_id);
 
         if (!ex) {
           console.error(`Tietokantavirhe: Liikettä ID:llä ${s.exercise_id} ei löydy.`);
@@ -91,22 +79,22 @@ export default function WorkoutScreen() {
     }
 
     LOAD_EXERCISE_BLOCKS: {
-      if (exerciseMap.size == 0) {
+      if (exerciseMap.size === 0) {
         break LOAD_EXERCISE_BLOCKS;
       }
       const newBlocks: ExerciseBlock[] = [];
       for (const [exId, { exercise, sets: exSets }] of exerciseMap) {
-        const lastSets = await getLastSetsForExercise(db, exId, workoutId);
-        const history = await getExerciseHistory(db, exId, workoutId, 3);
+        const lastSets = await db.getLastSetsForExercise(exId, workoutId);
+        const history = await db.getExerciseHistory(exId, workoutId, 3);
         newBlocks.push({ exercise, sets: exSets, lastSets, history, collapsed: false });
       }
 
-      setBlocks(prevBlocks => {
-        return newBlocks.map(nb => {
-          const existing = prevBlocks.find(pb => pb.exercise.id === nb.exercise.id);
+      setBlocks((prevBlocks) => {
+        return newBlocks.map((nb) => {
+          const existing = prevBlocks.find((pb) => pb.exercise.id === nb.exercise.id);
           return {
             ...nb,
-            collapsed: existing ? existing.collapsed : nb.collapsed
+            collapsed: existing ? existing.collapsed : nb.collapsed,
           };
         });
       });
@@ -114,7 +102,7 @@ export default function WorkoutScreen() {
 
     LOAD_WORKOUT_TIMER: {
       try {
-        const savedTimer = await getWorkoutTimer(db, workoutId);
+        const savedTimer = await db.getWorkoutTimer(workoutId);
         if (!savedTimer) {
           stopwatch.reset();
           break LOAD_WORKOUT_TIMER;
@@ -139,14 +127,16 @@ export default function WorkoutScreen() {
           countedLaps.push(previousLapEnded);
         }
 
-        stopwatch.setTimer(elapsed, isRunning, countedLaps,);
+        stopwatch.setTimer(elapsed, isRunning, countedLaps);
       } catch (error) {
-        console.error("Virhe sekuntikellon alustuksessa:", error);
+        console.error('Virhe sekuntikellon alustuksessa:', error);
       }
     }
-  }, [db, workoutId]);
+  }, [db, workoutId, stopwatch]);
 
-  useEffect(() => { loadWorkout(); }, [loadWorkout]);
+  useEffect(() => {
+    loadWorkout(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [loadWorkout]);
 
   const handleAdjustDate = async (daysDelta: number) => {
     if (!workout) return;
@@ -155,22 +145,22 @@ export default function WorkoutScreen() {
     const newIsoString = currentDate.toISOString();
 
     try {
-      await updateWorkoutStartedAt(db, workoutId, newIsoString);
-      setWorkout(prev => {
+      await db.updateWorkoutStartedAt(workoutId, newIsoString);
+      setWorkout((prev) => {
         if (!prev) return null;
         return { ...prev, started_at: newIsoString };
       });
     } catch (error) {
-      console.error("Päivämäärän päivitys epäonnistui:", error);
+      console.error('Päivämäärän päivitys epäonnistui:', error);
     }
   };
 
   const handleAddExercise = async (exercise: Exercise) => {
     setShowExercisePicker(false);
-    const lastSets = await getLastSetsForExercise(db, exercise.id, workoutId);
+    const lastSets = await db.getLastSetsForExercise(exercise.id, workoutId);
     const prefillReps = lastSets.length > 0 ? lastSets[0].reps : null;
     const prefillWeight = lastSets.length > 0 ? lastSets[0].weight : null;
-    await addSet(db, workoutId, exercise.id, 0, prefillReps, prefillWeight);
+    await db.addSet(workoutId, exercise.id, 0, prefillReps, prefillWeight);
     await loadWorkout();
   };
 
@@ -182,37 +172,46 @@ export default function WorkoutScreen() {
       setEditValue('');
     }
     const lastIdx = block.sets.length > 0 ? block.sets[block.sets.length - 1].set_index : -1;
-    const ref = block.sets.length > 0 ? block.sets[block.sets.length - 1] : block.lastSets[block.sets.length] ?? null;
-    await addSet(db, workoutId, block.exercise.id, lastIdx + 1, ref?.reps ?? null, ref?.weight ?? null);
+    const ref =
+      block.sets.length > 0
+        ? block.sets[block.sets.length - 1]
+        : (block.lastSets[block.sets.length] ?? null);
+    await db.addSet(
+      workoutId,
+      block.exercise.id,
+      lastIdx + 1,
+      ref?.reps ?? null,
+      ref?.weight ?? null,
+    );
     if (stopwatch.running) stopwatch.lap();
     await loadWorkout();
   };
 
   const handleDeleteSet = async (setId: number) => {
     if (focusedSetId === setId) setFocusedSetId(null);
-    await deleteSet(db, setId);
+    await db.deleteSet(setId);
     await loadWorkout();
   };
 
   const handleIncrement = async (setId: number, field: 'weight' | 'reps', delta: number) => {
-    const set = blocks.flatMap(b => b.sets).find(s => s.id === setId);
+    const set = blocks.flatMap((b) => b.sets).find((s) => s.id === setId);
     if (!set) return;
     const current = field === 'weight' ? (set.weight ?? 0) : (set.reps ?? 0);
     const newVal = Math.max(0, current + delta);
     const reps = field === 'reps' ? newVal : set.reps;
     const weight = field === 'weight' ? newVal : set.weight;
-    await updateSet(db, setId, reps, weight);
+    await db.updateSet(setId, reps, weight);
     await loadWorkout();
   };
 
   // Save current edit value to DB
   const saveEdit = async (setId: number, field: 'weight' | 'reps', value: string) => {
     const numValue = value === '' ? null : parseFloat(value);
-    const set = blocks.flatMap(b => b.sets).find(s => s.id === setId);
+    const set = blocks.flatMap((b) => b.sets).find((s) => s.id === setId);
     if (!set) return;
     const reps = field === 'reps' ? (numValue as number | null) : set.reps;
     const weight = field === 'weight' ? numValue : set.weight;
-    await updateSet(db, setId, reps, weight);
+    await db.updateSet(setId, reps, weight);
   };
 
   // Track if we're transitioning weight→reps (suppress blur handling)
@@ -226,7 +225,7 @@ export default function WorkoutScreen() {
     await saveEdit(setId, 'weight', editValue);
 
     // Switch to reps — set state synchronously before any re-render
-    const set = blocks.flatMap(b => b.sets).find(s => s.id === setId);
+    const set = blocks.flatMap((b) => b.sets).find((s) => s.id === setId);
     setEditing({ setId, field: 'reps' });
     setEditValue(set?.reps?.toString() ?? '');
     // Let React re-render with the new editing state, then reload data
@@ -249,7 +248,7 @@ export default function WorkoutScreen() {
   const handleBlur = async () => {
     if (!editing || transitioning) return;
     // Small delay to allow +set press to register first
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 150));
     if (!editing || transitioning) return;
     await saveEdit(editing.setId, editing.field, editValue);
     setEditing(null);
@@ -258,7 +257,7 @@ export default function WorkoutScreen() {
   };
 
   const startEditing = (setId: number, field: 'weight' | 'reps') => {
-    const set = blocks.flatMap(b => b.sets).find(s => s.id === setId);
+    const set = blocks.flatMap((b) => b.sets).find((s) => s.id === setId);
     if (!set) return;
     setFocusedSetId(setId);
     setEditing({ setId, field });
@@ -266,12 +265,12 @@ export default function WorkoutScreen() {
   };
 
   const toggleCollapse = (idx: number) => {
-    setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, collapsed: !b.collapsed } : b));
+    setBlocks((prev) => prev.map((b, i) => (i === idx ? { ...b, collapsed: !b.collapsed } : b)));
   };
 
   const moveExercise = (idx: number, direction: -1 | 1) => {
     const target = idx + direction;
-    setBlocks(prev => {
+    setBlocks((prev) => {
       if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
@@ -283,12 +282,11 @@ export default function WorkoutScreen() {
     const now = new Date().toISOString();
 
     stopwatch.stop();
-    await saveWorkoutTimer(db, workoutId, 'STOP', false, stopwatch.elapsed, stopwatch.lapTime, now);
+    await db.saveWorkoutTimer(workoutId, 'STOP', false, stopwatch.elapsed, stopwatch.lapTime, now);
 
-    await finishWorkout(db, workoutId);
+    await db.finishWorkout(workoutId);
     router.back();
   };
-
 
   // Render history row: sets from past workouts, grouped with | separator
   const renderHistory = (history: WorkoutHistory[]) => {
@@ -302,9 +300,8 @@ export default function WorkoutScreen() {
           {history.map((wh, wi) => {
             const heavy = heaviestSet(wh.sets);
             // If too many sets, only show heaviest
-            const displaySets = wh.sets.length > MAX_SETS_PER_WORKOUT
-              ? (heavy ? [heavy] : [])
-              : wh.sets;
+            const displaySets =
+              wh.sets.length > MAX_SETS_PER_WORKOUT ? (heavy ? [heavy] : []) : wh.sets;
 
             return (
               <View key={wh.workout_id} style={styles.historyGroup}>
@@ -316,7 +313,8 @@ export default function WorkoutScreen() {
                       key={s.id ?? si}
                       style={[styles.historySet, isHeaviest && styles.historyBold]}
                     >
-                      {fmtSet(s)}{si < displaySets.length - 1 ? '  ' : ''}
+                      {fmtSet(s)}
+                      {si < displaySets.length - 1 ? '  ' : ''}
                     </Text>
                   );
                 })}
@@ -342,48 +340,46 @@ export default function WorkoutScreen() {
     const newIsoString = currentDate.toISOString();
 
     try {
-      await updateWorkoutStartedAt(db, workoutId, newIsoString);
-      setWorkout(prev => prev ? { ...prev, started_at: newIsoString } : null);
+      await db.updateWorkoutStartedAt(workoutId, newIsoString);
+      setWorkout((prev) => (prev ? { ...prev, started_at: newIsoString } : null));
     } catch (err) {
-      console.error("Kalenteripäivitys epäonnistui:", err);
+      console.error('Kalenteripäivitys epäonnistui:', err);
     }
   };
 
   // ISO -> "YYYY-MM-DD"
   const inputDateValue = workout ? new Date(workout.started_at).toISOString().split('T')[0] : '';
 
-const handleStart = async () => {
-  const now = new Date().toISOString();
+  const handleStart = async () => {
+    const now = new Date().toISOString();
 
-  stopwatch.start();
-  await saveWorkoutTimer(db, workoutId, 'START', true, stopwatch.elapsed, stopwatch.lapTime, now);
-};
+    stopwatch.start();
+    await db.saveWorkoutTimer(workoutId, 'START', true, stopwatch.elapsed, stopwatch.lapTime, now);
+  };
 
-const handleStop = async () => {
-  const now = new Date().toISOString();
-  const newElapsed = stopwatch.elapsed;
-  const newLap = stopwatch.lapTime;
+  const handleStop = async () => {
+    const now = new Date().toISOString();
+    const newElapsed = stopwatch.elapsed;
+    const newLap = stopwatch.lapTime;
 
-  stopwatch.stop();
-  await saveWorkoutTimer(db, workoutId, 'STOP', false, newElapsed, newLap, now);
-};
+    stopwatch.stop();
+    await db.saveWorkoutTimer(workoutId, 'STOP', false, newElapsed, newLap, now);
+  };
 
-const handleLap = async () => {
-  const now = new Date().toISOString();
-  const newElapsed = stopwatch.elapsed;
+  const handleLap = async () => {
+    const now = new Date().toISOString();
+    const newElapsed = stopwatch.elapsed;
 
-  stopwatch.lap();
-  await saveWorkoutTimer(db, workoutId, 'LAP', true, newElapsed, 0, now);
-};
+    stopwatch.lap();
+    await db.saveWorkoutTimer(workoutId, 'LAP', true, newElapsed, 0, now);
+  };
 
-const handleReset = async () => {
-  const now = new Date().toISOString();
+  const handleReset = async () => {
+    const now = new Date().toISOString();
 
-  stopwatch.reset();
-  await saveWorkoutTimer(db, workoutId, 'RESET', false, 0, 0, now);
-};
-
-
+    stopwatch.reset();
+    await db.saveWorkoutTimer(workoutId, 'RESET', false, 0, 0, now);
+  };
 
   return (
     <View style={styles.container}>
@@ -403,23 +399,20 @@ const handleReset = async () => {
           </Pressable>
         </View>
         <View style={styles.metronomeSection}>
-          <Pressable onPress={metronome.toggle} style={[styles.timerBtn, metronome.playing && styles.activeBtn]}>
+          <Pressable
+            onPress={metronome.toggle}
+            style={[styles.timerBtn, metronome.playing && styles.activeBtn]}
+          >
             <Text style={styles.timerBtnText}>{metronome.playing ? '60 BPM ■' : '60 BPM ▶'}</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Workout metadata and Exercise Blocks */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {workout && (
           <View style={styles.dateEditRow}>
-            <Pressable
-              onPress={() => handleAdjustDate(-1)}
-              style={styles.dateBtn}
-            >
+            <Pressable onPress={() => handleAdjustDate(-1)} style={styles.dateBtn}>
               <Text style={styles.dateBtnText}>−</Text>
             </Pressable>
 
@@ -430,10 +423,7 @@ const handleReset = async () => {
               style={webInputStyle}
             />
 
-            <Pressable
-              onPress={() => handleAdjustDate(1)}
-              style={styles.dateBtn}
-            >
+            <Pressable onPress={() => handleAdjustDate(1)} style={styles.dateBtn}>
               <Text style={styles.dateBtnText}>+</Text>
             </Pressable>
           </View>
@@ -482,7 +472,9 @@ const handleReset = async () => {
                           style={styles.rowContent}
                           onPress={() => setFocusedSetId(focused ? null : s.id)}
                         >
-                          <Text style={[styles.cellText, styles.colSet, styles.setNum]}>{i + 1}</Text>
+                          <Text style={[styles.cellText, styles.colSet, styles.setNum]}>
+                            {i + 1}
+                          </Text>
 
                           <Pressable
                             style={[styles.editableCell, styles.colWeight]}
@@ -535,19 +527,31 @@ const handleReset = async () => {
                         <View style={styles.incrementRow}>
                           <View style={styles.incrementGroup}>
                             <Text style={styles.incrementLabel}>{t.kg}</Text>
-                            <Pressable style={styles.incBtn} onPress={() => handleIncrement(s.id, 'weight', -WEIGHT_STEP)}>
+                            <Pressable
+                              style={styles.incBtn}
+                              onPress={() => handleIncrement(s.id, 'weight', -WEIGHT_STEP)}
+                            >
                               <Text style={styles.incBtnText}>−{WEIGHT_STEP}</Text>
                             </Pressable>
-                            <Pressable style={styles.incBtn} onPress={() => handleIncrement(s.id, 'weight', WEIGHT_STEP)}>
+                            <Pressable
+                              style={styles.incBtn}
+                              onPress={() => handleIncrement(s.id, 'weight', WEIGHT_STEP)}
+                            >
                               <Text style={styles.incBtnText}>+{WEIGHT_STEP}</Text>
                             </Pressable>
                           </View>
                           <View style={styles.incrementGroup}>
                             <Text style={styles.incrementLabel}>{t.reps}</Text>
-                            <Pressable style={styles.incBtn} onPress={() => handleIncrement(s.id, 'reps', -REPS_STEP)}>
+                            <Pressable
+                              style={styles.incBtn}
+                              onPress={() => handleIncrement(s.id, 'reps', -REPS_STEP)}
+                            >
                               <Text style={styles.incBtnText}>−{REPS_STEP}</Text>
                             </Pressable>
-                            <Pressable style={styles.incBtn} onPress={() => handleIncrement(s.id, 'reps', REPS_STEP)}>
+                            <Pressable
+                              style={styles.incBtn}
+                              onPress={() => handleIncrement(s.id, 'reps', REPS_STEP)}
+                            >
                               <Text style={styles.incBtnText}>+{REPS_STEP}</Text>
                             </Pressable>
                           </View>
@@ -576,12 +580,19 @@ const handleReset = async () => {
           {showExercisePicker && (
             <View style={styles.pickerList}>
               {allExercises
-                .filter(e => !blocks.some(b => b.exercise.id === e.id))
+                .filter((e) => !blocks.some((b) => b.exercise.id === e.id))
                 .sort((a, b) =>
-                  translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
+                  translateExercise(a.name, locale).localeCompare(
+                    translateExercise(b.name, locale),
+                    locale,
+                  ),
                 )
-                .map(e => (
-                  <Pressable key={e.id} style={styles.pickerItem} onPress={() => handleAddExercise(e)}>
+                .map((e) => (
+                  <Pressable
+                    key={e.id}
+                    style={styles.pickerItem}
+                    onPress={() => handleAddExercise(e)}
+                  >
                     <Text style={styles.pickerText}>{translateExercise(e.name, locale)}</Text>
                   </Pressable>
                 ))}
@@ -609,7 +620,12 @@ const styles = StyleSheet.create({
   },
   timerSection: { flex: 1 },
   timerLabel: { color: colors.textSecondary, fontSize: 10 },
-  lapTime: { color: colors.accent, fontSize: 24, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  lapTime: {
+    color: colors.accent,
+    fontSize: 24,
+    fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
+  },
   totalTime: { color: colors.textSecondary, fontSize: 14, fontVariant: ['tabular-nums'] },
   timerButtons: { flexDirection: 'column', gap: 4 },
   timerBtn: {
@@ -674,7 +690,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  exerciseHeader: { padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  exerciseHeader: {
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   exerciseNameWrap: { flex: 1 },
   exerciseName: { color: colors.textPrimary, fontSize: 16, fontWeight: 'bold' },
   reorderButtons: { flexDirection: 'row', gap: 4 },
@@ -735,7 +756,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cellValue: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  cellValue: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
+  },
   editInput: {
     color: colors.textPrimary,
     fontSize: 18,
@@ -770,7 +796,12 @@ const styles = StyleSheet.create({
     minWidth: 44,
     alignItems: 'center',
   },
-  incBtnText: { color: colors.cyan, fontSize: 14, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  incBtnText: {
+    color: colors.cyan,
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
+  },
   addSetRow: {
     paddingVertical: 6,
     alignItems: 'center',
@@ -837,4 +868,3 @@ const webInputStyle = {
   minWidth: '135px',
   maxWidth: '135px',
 };
-

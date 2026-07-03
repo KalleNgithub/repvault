@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import type { DB } from './interface';
-import { initDatabase, seedExercises, deduplicateExercises } from './schema';
 
 const DatabaseContext = createContext<DB | null>(null);
 
@@ -20,26 +19,21 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       let database: DB;
 
       if (Platform.OS === 'web') {
-        const { openWebDatabase } = await import('./webdb');
+        const { openWebDatabase } = await import('./indexdb/IndexDB');
         database = await openWebDatabase();
       } else {
-        const { openDatabaseAsync } = await import('expo-sqlite');
-        database = await openDatabaseAsync('workout-log.db') as unknown as DB;
+        const { openSQLiteDatabase } = await import('./sqlite/SQLiteDB');
+        database = await openSQLiteDatabase();
       }
 
-      await initDatabase(database);
-      await deduplicateExercises(database);
-      await seedExercises(database);
       if (mounted) setDb(database);
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!db) return null; // loading
 
-  return (
-    <DatabaseContext.Provider value={db}>
-      {children}
-    </DatabaseContext.Provider>
-  );
+  return <DatabaseContext.Provider value={db}>{children}</DatabaseContext.Provider>;
 }

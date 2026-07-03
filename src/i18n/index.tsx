@@ -27,7 +27,9 @@ const localeMap: Record<Locale, string> = { en: 'en-GB', fi: 'fi-FI' };
 export function formatDateLocale(dateStr: string, locale: Locale): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString(localeMap[locale], {
-    weekday: 'short', month: 'short', day: 'numeric',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
   });
 }
 
@@ -56,9 +58,5 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLocale,
   };
 
-  return (
-    <I18nContext.Provider value={value}>
-      {children}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

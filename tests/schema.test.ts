@@ -1,3 +1,6 @@
+import type { DB } from '../src/db/interface';
+import { initializeDatabaseSequence } from '../src/db/schema';
+
 jest.mock('react-native', () => ({
   Platform: {
     OS: 'web',
@@ -5,8 +8,10 @@ jest.mock('react-native', () => ({
   },
 }));
 
-import type { DB, Row, RunResult } from '../src/db/interface';
-import { seedExercises, deduplicateExercises } from '../src/db/schema';
+interface Row {
+  id: number;
+  [key: string]: any;
+}
 
 // In-memory mock DB for testing schema logic
 function createMockDB(): DB & { tables: Record<string, Row[]> } {
@@ -14,81 +19,136 @@ function createMockDB(): DB & { tables: Record<string, Row[]> } {
     exercises: [],
     workouts: [],
     workout_sets: [],
+    settings: [],
+    workout_timers: [],
   };
-  let nextId: Record<string, number> = { exercises: 1, workouts: 1, workout_sets: 1 };
+  let nextId: Record<string, number> = {
+    exercises: 1,
+    workouts: 1,
+    workout_sets: 1,
+    settings: 1,
+    workout_timers: 1,
+  };
 
-  return {
+  const mock: DB & { tables: Record<string, Row[]> } = {
     tables,
-    async execAsync() {},
-    async runAsync(sql: string, params: any[] = []): Promise<RunResult> {
-      const insertMatch = sql.match(/INSERT.*INTO\s+(\w+)/i);
-      if (insertMatch) {
-        const table = insertMatch[1];
-        const colMatch = sql.match(/\(([^)]+)\)\s*VALUES/i);
-        if (!colMatch) return { lastInsertRowId: 0, changes: 0 };
-        const cols = colMatch[1].split(',').map(c => c.trim());
-        const row: Row = { id: nextId[table]++ };
-        cols.forEach((col, i) => { row[col] = params[i] ?? null; });
-        tables[table].push(row);
-        return { lastInsertRowId: row.id as number, changes: 1 };
-      }
-      const updateMatch = sql.match(/UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*\?\s+WHERE\s+(\w+)\s*=\s*\?/i);
-      if (updateMatch) {
-        const [, table, setCol, whereCol] = updateMatch;
-        let changes = 0;
-        for (const row of tables[table]) {
-          if (row[whereCol] === params[1]) {
-            row[setCol] = params[0];
-            changes++;
-          }
+
+    async init() {},
+    async createTablesAndStores() {},
+
+    async getExerciseCount() {
+      return tables.exercises.length;
+    },
+
+    async insertExercise(name: string, createdAt: string) {
+      const row: Row = { id: nextId.exercises++, name, created_at: createdAt };
+      tables.exercises.push(row);
+    },
+
+    async getAllExercisesForDeduplication() {
+      return tables.exercises.map((e) => ({ id: e.id, name: e.name }));
+    },
+
+    async updateWorkoutSetsExerciseId(originalId: number, duplicateId: number) {
+      for (const set of tables.workout_sets) {
+        if (set.exercise_id === duplicateId) {
+          set.exercise_id = originalId;
         }
-        return { lastInsertRowId: 0, changes };
       }
-      const deleteMatch = sql.match(/DELETE\s+FROM\s+(\w+)\s+WHERE\s+(\w+)\s*=\s*\?/i);
-      if (deleteMatch) {
-        const [, table, whereCol] = deleteMatch;
-        const before = tables[table].length;
-        tables[table] = tables[table].filter(r => r[whereCol] !== params[0]);
-        return { lastInsertRowId: 0, changes: before - tables[table].length };
-      }
-      return { lastInsertRowId: 0, changes: 0 };
     },
-    async getAllAsync<T extends Row>(sql: string): Promise<T[]> {
-      const fromMatch = sql.match(/FROM\s+(\w+)/i);
-      if (!fromMatch) return [];
-      return [...tables[fromMatch[1]]] as T[];
+
+    async deleteExerciseById(id: number) {
+      tables.exercises = tables.exercises.filter((e) => e.id !== id);
     },
-    async getFirstAsync<T extends Row>(sql: string): Promise<T | null> {
-      if (/COUNT/i.test(sql)) {
-        const fromMatch = sql.match(/FROM\s+(\w+)/i);
-        if (!fromMatch) return null;
-        return { c: tables[fromMatch[1]].length } as unknown as T;
-      }
-      const results = await this.getAllAsync<T>(sql);
-      return results[0] ?? null;
+
+    // Stubs for remaining interface methods
+    async getSetting() {
+      return null;
     },
+    async setSetting() {},
+    async getAllExercises() {
+      return tables.exercises as any;
+    },
+    async addExercise(name: string) {
+      const row = { id: nextId.exercises++, name, created_at: new Date().toISOString() };
+      tables.exercises.push(row);
+      return row;
+    },
+    async createWorkout() {
+      return { id: 1, started_at: '', finished_at: null, notes: null, device: null };
+    },
+    async finishWorkout() {},
+    async deleteWorkout() {},
+    async getRecentWorkouts() {
+      return [];
+    },
+    async getWorkoutSummaries() {
+      return new Map();
+    },
+    async getWorkoutWithSets() {
+      return { workout: null, sets: [] };
+    },
+    async updateWorkoutStartedAt() {},
+    async copyWorkoutWithWeightsOnly() {
+      return { id: 1, started_at: '', finished_at: null, notes: null, device: null };
+    },
+    async addSet() {
+      return {
+        id: 1,
+        workout_id: 1,
+        exercise_id: 1,
+        set_index: 0,
+        reps: null,
+        weight: null,
+        completed_at: null,
+      };
+    },
+    async updateSet() {},
+    async deleteSet() {},
+    async getLastSetsForExercise() {
+      return [];
+    },
+    async getExerciseHistory() {
+      return [];
+    },
+    async getWorkoutTimer() {
+      return null;
+    },
+    async saveWorkoutTimer() {},
+    async getWorkouts() {
+      return [];
+    },
+    async getAllSets() {
+      return [];
+    },
+    async insertWorkoutRaw() {
+      return 0;
+    },
+    async insertSetRaw() {},
   };
+
+  return mock;
 }
 
-describe('seedExercises', () => {
+describe('initializeDatabaseSequence — seedExercises', () => {
   it('seeds 23 exercises into empty database', async () => {
     const db = createMockDB();
-    await seedExercises(db);
+    await initializeDatabaseSequence(db);
     expect(db.tables.exercises).toHaveLength(23);
   });
 
   it('does not re-seed when exercises already exist', async () => {
     const db = createMockDB();
-    await seedExercises(db);
+    await initializeDatabaseSequence(db);
     const countBefore = db.tables.exercises.length;
-    await seedExercises(db);
+    await initializeDatabaseSequence(db);
     expect(db.tables.exercises).toHaveLength(countBefore);
   });
 
   it('seeds all expected exercise names', async () => {
     const db = createMockDB();
-    await seedExercises(db);
-    const names = db.tables.exercises.map(e => e.name);
+    await initializeDatabaseSequence(db);
+    const names = db.tables.exercises.map((e) => e.name);
     expect(names).toContain('Squat');
     expect(names).toContain('Bench Press');
     expect(names).toContain('Deadlift');
@@ -98,19 +158,20 @@ describe('seedExercises', () => {
   });
 });
 
-describe('deduplicateExercises', () => {
+describe('initializeDatabaseSequence — deduplicateExercises', () => {
   it('removes duplicate exercises keeping lowest id', async () => {
     const db = createMockDB();
     // Manually insert duplicates
     db.tables.exercises = [
       { id: 1, name: 'Squat' },
       { id: 2, name: 'Bench Press' },
-      { id: 3, name: 'Squat' },       // duplicate
-      { id: 4, name: 'Bench Press' },  // duplicate
+      { id: 3, name: 'Squat' }, // duplicate
+      { id: 4, name: 'Bench Press' }, // duplicate
     ];
-    await deduplicateExercises(db);
+    // Skip seeding (exercises already exist), run deduplication
+    await initializeDatabaseSequence(db);
     expect(db.tables.exercises).toHaveLength(2);
-    expect(db.tables.exercises.map(e => e.id)).toEqual([1, 2]);
+    expect(db.tables.exercises.map((e) => e.id)).toEqual([1, 2]);
   });
 
   it('reassigns workout_sets to original exercise id', async () => {
@@ -119,10 +180,8 @@ describe('deduplicateExercises', () => {
       { id: 1, name: 'Squat' },
       { id: 5, name: 'Squat' }, // duplicate
     ];
-    db.tables.workout_sets = [
-      { id: 1, exercise_id: 5, workout_id: 1, set_index: 0 },
-    ];
-    await deduplicateExercises(db);
+    db.tables.workout_sets = [{ id: 1, exercise_id: 5, workout_id: 1, set_index: 0 }];
+    await initializeDatabaseSequence(db);
     expect(db.tables.workout_sets[0].exercise_id).toBe(1);
   });
 
@@ -132,7 +191,7 @@ describe('deduplicateExercises', () => {
       { id: 1, name: 'Squat' },
       { id: 2, name: 'Bench Press' },
     ];
-    await deduplicateExercises(db);
+    await initializeDatabaseSequence(db);
     expect(db.tables.exercises).toHaveLength(2);
   });
 });

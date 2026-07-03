@@ -3,10 +3,10 @@ import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useDatabase } from '../src/db/DatabaseProvider';
-import { createWorkout, getRecentWorkouts, deleteWorkout, getWorkoutSummaries, type WorkoutExerciseSummary, copyWorkoutWithWeightsOnly } from '../src/db/queries';
 import { useI18n, formatDateLocale, translateExercise } from '../src/i18n';
 import { colors } from '../src/theme';
 import type { Workout } from '../src/types';
+import { WorkoutExerciseSummary } from '../src/db/interface';
 
 export default function HomeScreen() {
   const db = useDatabase();
@@ -17,38 +17,41 @@ export default function HomeScreen() {
   const [isCopyMode, setIsCopyMode] = useState(false);
 
   const loadData = useCallback(async () => {
-    const wks = await getRecentWorkouts(db);
+    let wks = await db.getRecentWorkouts();
     setWorkouts(wks);
     if (wks.length > 0) {
-      const sums = await getWorkoutSummaries(db, wks.map(w => w.id));
+      const sums = await db.getWorkoutSummaries(wks.map((w) => w.id));
       setSummaries(sums);
     }
   }, [db]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
   const handleNewWorkout = async () => {
-    const workout = await createWorkout(db);
+    const workout = await db.createWorkout();
     router.push({ pathname: '/workout', params: { id: workout.id.toString() } });
   };
 
   const formatDate = (dateStr: string) => formatDateLocale(dateStr, locale);
 
   const handleDelete = async (workoutId: number) => {
-    await deleteWorkout(db, workoutId);
+    await db.deleteWorkout(workoutId);
     loadData();
   };
 
   const handleSelectOldWorkout = async (sourceWorkoutId: number) => {
     try {
-      await copyWorkoutWithWeightsOnly(db, sourceWorkoutId);
+      await db.copyWorkoutWithWeightsOnly(sourceWorkoutId);
       setIsCopyMode(false);
       await loadData();
     } catch (error) {
-      console.error("Treenin kopiointi epäonnistui:", error);
+      console.error('Treenin kopiointi epäonnistui:', error);
     }
   };
-
 
   return (
     <View style={styles.container}>
@@ -65,9 +68,11 @@ export default function HomeScreen() {
           style={[styles.oldButton, isCopyMode && styles.activeOldBtn]}
           onPress={() => setIsCopyMode(!isCopyMode)}
         >
-          <Text style={[styles.oldButtonText, isCopyMode && styles.activeOldBtnText]}
+          <Text
+            style={[styles.oldButtonText, isCopyMode && styles.activeOldBtnText]}
             numberOfLines={1}
-            ellipsizeMode="clip">
+            ellipsizeMode="clip"
+          >
             {isCopyMode ? t.cancel : t.oldWorkOut}
           </Text>
         </Pressable>
@@ -89,13 +94,14 @@ export default function HomeScreen() {
             >
               <View style={styles.workoutHeader}>
                 <Text style={styles.workoutDate}>{formatDate(item.started_at)}</Text>
-                <Text style={styles.workoutStatus}>
-                  {item.finished_at ? t.done : t.inProgress}
-                </Text>
+                <Text style={styles.workoutStatus}>{item.finished_at ? t.done : t.inProgress}</Text>
               </View>
               {summaries.get(item.id) && summaries.get(item.id)!.length > 0 && (
                 <Text style={styles.workoutPreview} numberOfLines={1}>
-                  {summaries.get(item.id)!.map(s => `${s.set_count}× ${translateExercise(s.exercise_name, locale)}`).join(', ')}
+                  {summaries
+                    .get(item.id)!
+                    .map((s) => `${s.set_count}× ${translateExercise(s.exercise_name, locale)}`)
+                    .join(', ')}
                 </Text>
               )}
             </Pressable>
@@ -106,7 +112,6 @@ export default function HomeScreen() {
             >
               <Text style={styles.deleteText}>×</Text>
             </Pressable>
-
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>{t.noWorkouts}</Text>}
@@ -142,18 +147,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.purple
+    borderColor: colors.purple,
   },
-  oldButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold',  },
+  oldButtonText: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold' },
   disabledBtn: { opacity: 0.3 },
   activeOldBtn: {
     backgroundColor: colors.purpleDim,
-    borderColor: colors.pink
+    borderColor: colors.pink,
   },
   activeOldBtnText: {
-    color: colors.pink
+    color: colors.pink,
   },
-  sectionTitle: { color: colors.textSecondary, fontSize: 14, marginBottom: 8, textTransform: 'uppercase' },
+  sectionTitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
   workoutItem: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -2,7 +2,6 @@ import { View, Text, Pressable, StyleSheet, FlatList, TextInput } from 'react-na
 import { useState, useEffect } from 'react';
 import { useDatabase } from '../src/db/DatabaseProvider';
 import { useI18n, translateExercise } from '../src/i18n';
-import { getAllExercises, addExercise } from '../src/db/queries';
 import { colors } from '../src/theme';
 import type { Exercise } from '../src/types';
 
@@ -13,9 +12,9 @@ export default function ExercisesScreen() {
   const [newName, setNewName] = useState('');
 
   useEffect(() => {
-    getAllExercises(db).then((exs) => {
+    db.getAllExercises().then((exs) => {
       exs.sort((a, b) =>
-        translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
+        translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale),
       );
       setExercises(exs);
     });
@@ -25,13 +24,13 @@ export default function ExercisesScreen() {
     const name = newName.trim();
     if (!name) return;
     // Enforce unique names (case-insensitive check)
-    const exists = exercises.some(e => e.name.toLowerCase() === name.toLowerCase());
+    const exists = exercises.some((e) => e.name.toLowerCase() === name.toLowerCase());
     if (exists) return;
-    await addExercise(db, name);
+    await db.addExercise(name);
     setNewName('');
-    const updated = await getAllExercises(db);
+    const updated = await db.getAllExercises();
     updated.sort((a, b) =>
-      translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale)
+      translateExercise(a.name, locale).localeCompare(translateExercise(b.name, locale), locale),
     );
     setExercises(updated);
   };
