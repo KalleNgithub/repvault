@@ -4,8 +4,8 @@ import { useFonts, Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 
 import { DatabaseProvider } from '../src/db/DatabaseProvider';
 import { I18nProvider } from '../src/i18n';
-import { colors } from '../src/theme'; // Hyödynnetään antamaasi väripalettia
-import { DAILY_BANNERS } from '../src/constants/banners'; // TUOTU TÄÄLTÄ
+import { colors } from '../src/theme';
+import { getBannerForDay } from '../src/constants/banners';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -24,13 +24,9 @@ export default function RootLayout() {
   );
 
   // Asettaa 1080px kuvan ylös keskelle banneriksi hyödyntäen teeman taustavärejä
-  // Asettaa 1080px kuvan ylös keskelle banneriksi hyödyntäen teeman taustavärejä
   const CustomHeaderBackground = () => {
-    // Haetaan nykyisen päivän numero (0-6)
     const currentDay = new Date().getDay();
-    // Valitaan kuva viikonpäivän mukaan, tai käytetään oletusta jos päivää ei tunnisteta
-    const currentBanner =
-      DAILY_BANNERS[currentDay] || require('../assets/valmis_banneri_city.webp');
+    const currentBanner = getBannerForDay(currentDay);
 
     return (
       <View style={styles.headerBackgroundContainer}>
