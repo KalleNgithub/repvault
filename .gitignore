@@ -44,3 +44,6 @@ coverage/
 /ios
 /android
 dist/
+
+# local folder
+local/

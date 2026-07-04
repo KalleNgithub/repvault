@@ -20,6 +20,11 @@
       "bundler": "metro"
     },
     "scheme": "repvault",
-    "plugins": ["expo-router", "expo-sqlite"]
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-font",
+      "expo-splash-screen"
+    ]
   }
 }
