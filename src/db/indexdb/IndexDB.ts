@@ -5,7 +5,7 @@ import { initializeDatabaseSequence } from '../schema';
 import { Exercise, Workout, WorkoutSet, WorkoutTimer } from '../../types';
 
 const DB_NAME = 'workout-log';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORES = ['exercises', 'workouts', 'workout_sets', 'settings', 'workout_timers'] as const;
 
 class WebDB implements DB {
@@ -592,7 +592,8 @@ class WebDB implements DB {
 
 export async function openWebDatabase(): Promise<DB> {
   const idb = await openDB(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion, newVersion, transaction) {
+    upgrade(db, oldVersion, _newVersion, transaction) {
+      // Create stores that don't exist yet (fresh install or new stores)
       for (const store of STORES) {
         if (!db.objectStoreNames.contains(store)) {
           if (store === 'settings') {
@@ -605,12 +606,25 @@ export async function openWebDatabase(): Promise<DB> {
         }
       }
 
+      // Migration from v3 → v4: add indexes and recreate workout_timers with correct keyPath
       if (oldVersion < 4) {
+        // Recreate workout_timers with workout_id as keyPath (was 'id' + autoIncrement)
+        if (db.objectStoreNames.contains('workout_timers')) {
+          const existingStore = transaction.objectStore('workout_timers');
+          // Check if keyPath needs migration (old schema used 'id')
+          if (existingStore.keyPath === 'id') {
+            db.deleteObjectStore('workout_timers');
+            db.createObjectStore('workout_timers', { keyPath: 'workout_id' });
+          }
+        }
+
+        // Add indexes to workouts
         const workoutStore = transaction.objectStore('workouts');
         if (!workoutStore.indexNames.contains('started_at')) {
           workoutStore.createIndex('started_at', 'started_at', { unique: false });
         }
 
+        // Add indexes to workout_sets
         const setStore = transaction.objectStore('workout_sets');
         if (!setStore.indexNames.contains('workout_id')) {
           setStore.createIndex('workout_id', 'workout_id', { unique: false });
