@@ -9,6 +9,7 @@ import { useStopwatch, formatTime } from '../src/hooks/useStopwatch';
 import { useMetronome } from '../src/hooks/useMetronome';
 import { colors } from '../src/theme';
 import { WorkoutHistory } from '../src/db/interface';
+import { IncrementSlider } from '../src/components/IncrementSlider';
 
 interface ExerciseBlock {
   exercise: Exercise;
@@ -522,39 +523,21 @@ export default function WorkoutScreen() {
                         </Pressable>
                       </View>
 
-                      {/* +/- controls for focused row */}
+                      {/* Increment sliders for focused row */}
                       {focused && !editing && (
                         <View style={styles.incrementRow}>
-                          <View style={styles.incrementGroup}>
-                            <Text style={styles.incrementLabel}>{t.kg}</Text>
-                            <Pressable
-                              style={styles.incBtn}
-                              onPress={() => handleIncrement(s.id, 'weight', -WEIGHT_STEP)}
-                            >
-                              <Text style={styles.incBtnText}>−{WEIGHT_STEP}</Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.incBtn}
-                              onPress={() => handleIncrement(s.id, 'weight', WEIGHT_STEP)}
-                            >
-                              <Text style={styles.incBtnText}>+{WEIGHT_STEP}</Text>
-                            </Pressable>
-                          </View>
-                          <View style={styles.incrementGroup}>
-                            <Text style={styles.incrementLabel}>{t.reps}</Text>
-                            <Pressable
-                              style={styles.incBtn}
-                              onPress={() => handleIncrement(s.id, 'reps', -REPS_STEP)}
-                            >
-                              <Text style={styles.incBtnText}>−{REPS_STEP}</Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.incBtn}
-                              onPress={() => handleIncrement(s.id, 'reps', REPS_STEP)}
-                            >
-                              <Text style={styles.incBtnText}>+{REPS_STEP}</Text>
-                            </Pressable>
-                          </View>
+                          <IncrementSlider
+                            label={t.kg}
+                            step={WEIGHT_STEP}
+                            range={4}
+                            onIncrement={(delta) => handleIncrement(s.id, 'weight', delta)}
+                          />
+                          <IncrementSlider
+                            label={t.reps}
+                            step={REPS_STEP}
+                            range={5}
+                            onIncrement={(delta) => handleIncrement(s.id, 'reps', delta)}
+                          />
                         </View>
                       )}
                     </View>
@@ -773,34 +756,14 @@ const styles = StyleSheet.create({
   deleteBtn: { paddingHorizontal: 8, paddingVertical: 2 },
   deleteText: { color: colors.textSecondary, fontSize: 16 },
   incrementRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 24,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     backgroundColor: colors.bgCard,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-  },
-  incrementGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  incrementLabel: { color: colors.textSecondary, fontSize: 11, width: 28 },
-  incBtn: {
-    backgroundColor: colors.purpleDim,
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 44,
-    alignItems: 'center',
-  },
-  incBtnText: {
-    color: colors.cyan,
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontVariant: ['tabular-nums'],
   },
   addSetRow: {
     paddingVertical: 6,
