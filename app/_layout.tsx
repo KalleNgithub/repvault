@@ -6,8 +6,25 @@ import { DatabaseProvider } from '../src/db/DatabaseProvider';
 import { I18nProvider } from '../src/i18n';
 import { colors } from '../src/theme';
 import { getBannerForDay } from '../src/constants/banners';
+import { useEffect } from 'react';
 
 export default function RootLayout() {
+  // PWA: auto-reload when a new service worker takes over
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.update();
+      });
+    }
+  }, []);
+
   const [fontsLoaded] = useFonts({
     'Orbitron-Bold': Orbitron_700Bold,
   });

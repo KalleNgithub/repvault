@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workout-log-v1';
+const CACHE_NAME = 'workout-log-v2';
 const PRECACHE_URLS = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -20,6 +20,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
+  // MUUTOS 1: Estetään ulkopuolisten domainien ja API-kutsujen välimuistitus akunkeston säästämiseksi
+  if (!request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
   // Network-first for navigation and API requests
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(() => caches.match('/')));
@@ -31,7 +36,10 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
-        if (response.ok && request.url.startsWith(self.location.origin)) {
+        // MUUTOS 2: Tallennetaan välimuistiin vain, jos kyseessä on oikea staattinen tiedosto (js, css, kuvat),
+        // mikä lopettaa iPhonen jatkuvan levykirjoituksen ja Chromen jumiutumisen.
+        const url = new URL(request.url);
+        if (response.ok && url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|webp|woff2|json)$/)) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
