@@ -634,6 +634,18 @@ export async function openWebDatabase(): Promise<DB> {
         }
       }
     },
+    blocked(currentVersion, blockedVersion) {
+      console.warn(
+        `IndexedDB upgrade blocked: v${currentVersion} → v${blockedVersion}. Close other tabs.`,
+      );
+    },
+    blocking(_currentVersion, _blockedVersion, event) {
+      // This connection blocks a newer version in another tab — close so it can proceed
+      (event.target as IDBDatabase)?.close();
+    },
+    terminated() {
+      console.warn('IndexedDB connection terminated unexpectedly.');
+    },
   });
 
   const webDBInstance = new WebDB(idb);

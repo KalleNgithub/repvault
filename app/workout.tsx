@@ -133,7 +133,8 @@ export default function WorkoutScreen() {
         console.error('Virhe sekuntikellon alustuksessa:', error);
       }
     }
-  }, [db, workoutId, stopwatch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, workoutId]);
 
   useEffect(() => {
     loadWorkout(); // eslint-disable-line react-hooks/set-state-in-effect
