@@ -16,16 +16,27 @@ export function useMetronome(bpm = 60) {
   const playingRef = useRef(false);
   const stopRef = useRef<() => void>(() => {});
 
-  const playClick = useCallback(() => {
+  const playClick = useCallback(async () => {
     if (Platform.OS !== 'web') return;
 
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
 
-    const ctx = audioContextRef.current;
+    let ctx = audioContextRef.current;
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      // On iOS PWA, resume() can fail silently after OS suspension.
+      // If state is still suspended after attempt, recreate the context.
+      try {
+        await ctx.resume();
+      } catch {
+        // resume() rejected — recreate below
+      }
+      if (ctx.state === 'suspended') {
+        ctx.close();
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        ctx = audioContextRef.current;
+      }
     }
 
     const osc = ctx.createOscillator();
@@ -103,6 +114,13 @@ export function useMetronome(bpm = 60) {
     const handleVisibilityAndExit = () => {
       if (document.visibilityState === 'hidden') {
         stop();
+        // iOS PWA: OS suspends AudioContext in background and resume()
+        // often fails silently afterward. Close it so playClick creates
+        // a fresh one on the next user-initiated start.
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
       }
     };
 
