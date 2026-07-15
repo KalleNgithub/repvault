@@ -101,6 +101,7 @@ function createMockDB(): DB & { tables: Record<string, Row[]> } {
         reps: null,
         weight: null,
         completed_at: null,
+        block_order: null,
       };
     },
     async updateSet() {},
@@ -111,6 +112,8 @@ function createMockDB(): DB & { tables: Record<string, Row[]> } {
     async getExerciseHistory() {
       return [];
     },
+    async updateBlockOrder() {},
+    async backfillBlockOrder() {},
     async getWorkoutTimer() {
       return null;
     },

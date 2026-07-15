@@ -61,6 +61,15 @@ export default function WorkoutScreen() {
     const { workout, sets } = await db.getWorkoutWithSets(workoutId);
     setWorkout(workout);
 
+    // Backfill block_order for legacy sets (null after migration)
+    if (sets.length > 0 && sets.some((s) => s.block_order == null)) {
+      await db.backfillBlockOrder(workoutId);
+      // Reload with correct ordering
+      const reloaded = await db.getWorkoutWithSets(workoutId);
+      sets.length = 0;
+      sets.push(...reloaded.sets);
+    }
+
     const exercises = await db.getAllExercises();
     setAllExercises(exercises);
 
@@ -163,6 +172,9 @@ export default function WorkoutScreen() {
     const prefillReps = lastSets.length > 0 ? lastSets[0].reps : null;
     const prefillWeight = lastSets.length > 0 ? lastSets[0].weight : null;
     await db.addSet(workoutId, exercise.id, 0, prefillReps, prefillWeight);
+    // New exercise block goes to the end
+    const newBlockOrder = blocks.length;
+    await db.updateBlockOrder(workoutId, exercise.id, newBlockOrder);
     await loadWorkout();
   };
 
@@ -185,6 +197,11 @@ export default function WorkoutScreen() {
       ref?.reps ?? null,
       ref?.weight ?? null,
     );
+    // Ensure the new set inherits this block's order
+    const blockIdx = blocks.findIndex((b) => b.exercise.id === block.exercise.id);
+    if (blockIdx >= 0 && block.sets.length > 0 && block.sets[0].block_order != null) {
+      await db.updateBlockOrder(workoutId, block.exercise.id, block.sets[0].block_order);
+    }
     if (stopwatch.running) stopwatch.lap();
     await loadWorkout();
   };
@@ -276,6 +293,12 @@ export default function WorkoutScreen() {
       if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
+
+      // Persist new block order to DB
+      for (let i = 0; i < next.length; i++) {
+        db.updateBlockOrder(workoutId, next[i].exercise.id, i);
+      }
+
       return next;
     });
   };

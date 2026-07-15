@@ -67,6 +67,8 @@ export interface DB {
     excludeWorkoutId?: number,
     workoutCount?: number,
   ): Promise<WorkoutHistory[]>;
+  updateBlockOrder(workoutId: number, exerciseId: number, blockOrder: number): Promise<void>;
+  backfillBlockOrder(workoutId: number): Promise<void>;
 
   // --- Timers ---
   getWorkoutTimer(workoutId: number): Promise<WorkoutTimer | null>;

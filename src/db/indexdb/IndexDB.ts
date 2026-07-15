@@ -258,10 +258,60 @@ class WebDB implements DB {
         exercise_name: exerciseMap.get(s.exercise_id) || 'Unknown',
       }))
       // Koska lista sisältää nyt vain tämän treenin sarjat, sorttaaminen on salamannopeaa
-      .sort((a, b) => a.id - b.id || a.set_index - b.set_index);
+      .sort(
+        (a, b) =>
+          (a.block_order ?? 999999) - (b.block_order ?? 999999) ||
+          a.id - b.id ||
+          a.set_index - b.set_index,
+      );
 
     await tx.done;
     return { workout, sets };
+  }
+
+  async updateBlockOrder(
+    workoutId: number,
+    exerciseId: number,
+    blockOrder: number,
+  ): Promise<void> {
+    const tx = this.db.transaction('workout_sets', 'readwrite');
+    const store = tx.objectStore('workout_sets');
+    const setsIndex = store.index('workout_id');
+    const sets = await setsIndex.getAll(IDBKeyRange.only(workoutId));
+
+    await Promise.all(
+      sets
+        .filter((s) => s.exercise_id === exerciseId)
+        .map((s) => {
+          s.block_order = blockOrder;
+          return store.put(s);
+        }),
+    );
+    await tx.done;
+  }
+
+  async backfillBlockOrder(workoutId: number): Promise<void> {
+    const tx = this.db.transaction('workout_sets', 'readwrite');
+    const store = tx.objectStore('workout_sets');
+    const setsIndex = store.index('workout_id');
+    const sets = await setsIndex.getAll(IDBKeyRange.only(workoutId));
+
+    // Determine exercise order by first (lowest) set ID per exercise
+    sets.sort((a, b) => a.id - b.id);
+    const exerciseOrder: number[] = [];
+    for (const s of sets) {
+      if (!exerciseOrder.includes(s.exercise_id)) {
+        exerciseOrder.push(s.exercise_id);
+      }
+    }
+
+    await Promise.all(
+      sets.map((s) => {
+        s.block_order = exerciseOrder.indexOf(s.exercise_id);
+        return store.put(s);
+      }),
+    );
+    await tx.done;
   }
 
   async updateWorkoutStartedAt(workoutId: number, startedAt: string): Promise<void> {
@@ -301,6 +351,7 @@ class WebDB implements DB {
         reps: null,
         weight: set.weight,
         completed_at: null,
+        block_order: set.block_order ?? null,
       }),
     );
 
@@ -330,6 +381,7 @@ class WebDB implements DB {
       reps,
       weight,
       completed_at: completedAt,
+      block_order: null as number | null,
     };
 
     const id = await this.db.add('workout_sets', setData);
@@ -547,6 +599,7 @@ class WebDB implements DB {
       reps,
       weight,
       completed_at: completedAt,
+      block_order: null,
     });
   }
 

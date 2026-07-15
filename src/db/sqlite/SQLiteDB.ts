@@ -67,6 +67,14 @@ class SQLiteDBImplementation implements DB {
       if (!hasDevice) {
         await this.db.execAsync('ALTER TABLE workouts ADD COLUMN device TEXT');
       }
+
+      const setCols = await this.db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workout_sets)',
+      );
+      const hasBlockOrder = setCols.some((c) => c.name === 'block_order');
+      if (!hasBlockOrder) {
+        await this.db.execAsync('ALTER TABLE workout_sets ADD COLUMN block_order INTEGER');
+      }
     }
   }
 
@@ -189,7 +197,7 @@ class SQLiteDBImplementation implements DB {
        FROM workout_sets ws
        JOIN exercises e ON e.id = ws.exercise_id
        WHERE ws.workout_id = ?
-       ORDER BY ws.id, ws.set_index`,
+       ORDER BY COALESCE(ws.block_order, 999999), ws.id, ws.set_index`,
       [workoutId],
     );
     return { workout: workout || null, sets };
@@ -217,6 +225,7 @@ class SQLiteDBImplementation implements DB {
       reps,
       weight,
       completed_at: new Date().toISOString(),
+      block_order: null,
     };
   }
 
@@ -287,6 +296,31 @@ class SQLiteDBImplementation implements DB {
     return Array.from(grouped.values());
   }
 
+  async updateBlockOrder(
+    workoutId: number,
+    exerciseId: number,
+    blockOrder: number,
+  ): Promise<void> {
+    await this.db.runAsync(
+      'UPDATE workout_sets SET block_order = ? WHERE workout_id = ? AND exercise_id = ?',
+      [blockOrder, workoutId, exerciseId],
+    );
+  }
+
+  async backfillBlockOrder(workoutId: number): Promise<void> {
+    const rows = await this.db.getAllAsync<{ exercise_id: number }>(
+      `SELECT exercise_id FROM workout_sets
+       WHERE workout_id = ? GROUP BY exercise_id ORDER BY MIN(id)`,
+      [workoutId],
+    );
+    for (let i = 0; i < rows.length; i++) {
+      await this.db.runAsync(
+        'UPDATE workout_sets SET block_order = ? WHERE workout_id = ? AND exercise_id = ?',
+        [i, workoutId, rows[i].exercise_id],
+      );
+    }
+  }
+
   async updateWorkoutStartedAt(workoutId: number, startedAt: string): Promise<void> {
     await this.db.runAsync('UPDATE workouts SET started_at = ? WHERE id = ?', [
       startedAt,
@@ -301,15 +335,16 @@ class SQLiteDBImplementation implements DB {
       exercise_id: number;
       set_index: number;
       weight: number | null;
+      block_order: number | null;
     }>(
-      'SELECT exercise_id, set_index, weight FROM workout_sets WHERE workout_id = ? ORDER BY id ASC',
+      'SELECT exercise_id, set_index, weight, block_order FROM workout_sets WHERE workout_id = ? ORDER BY id ASC',
       [sourceWorkoutId],
     );
 
     for (const set of oldSets) {
       await this.db.runAsync(
-        'INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [newWorkout.id, set.exercise_id, set.set_index, null, set.weight, null],
+        'INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at, block_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [newWorkout.id, set.exercise_id, set.set_index, null, set.weight, null, set.block_order],
       );
     }
 

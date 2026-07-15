@@ -20,6 +20,7 @@ export interface WorkoutSet {
   reps: number | null;
   weight: number | null;
   completed_at: string | null;
+  block_order: number | null;
 }
 
 // For display: groups sets by exercise within a workout
