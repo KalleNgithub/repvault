@@ -61,10 +61,9 @@ export default function WorkoutScreen() {
     const { workout, sets } = await db.getWorkoutWithSets(workoutId);
     setWorkout(workout);
 
-    // Backfill block_order for legacy sets (null after migration)
-    if (sets.length > 0 && sets.some((s) => s.block_order == null)) {
+    // Backfill block_order for legacy workouts (all sets null after migration)
+    if (sets.length > 0 && sets.every((s) => s.block_order == null)) {
       await db.backfillBlockOrder(workoutId);
-      // Reload with correct ordering
       const reloaded = await db.getWorkoutWithSets(workoutId);
       sets.length = 0;
       sets.push(...reloaded.sets);
@@ -197,10 +196,10 @@ export default function WorkoutScreen() {
       ref?.reps ?? null,
       ref?.weight ?? null,
     );
-    // Ensure the new set inherits this block's order
+    // Ensure the new set inherits this block's order (use array position, not stale field)
     const blockIdx = blocks.findIndex((b) => b.exercise.id === block.exercise.id);
-    if (blockIdx >= 0 && block.sets.length > 0 && block.sets[0].block_order != null) {
-      await db.updateBlockOrder(workoutId, block.exercise.id, block.sets[0].block_order);
+    if (blockIdx >= 0) {
+      await db.updateBlockOrder(workoutId, block.exercise.id, blockIdx);
     }
     if (stopwatch.running) stopwatch.lap();
     await loadWorkout();
