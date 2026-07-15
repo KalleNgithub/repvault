@@ -751,6 +751,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
+    width: '100%',        // Pakoittaa kentän täyttämään vain ympäröivän solun leveyden
     minWidth: 40,
     padding: 0,
   },
