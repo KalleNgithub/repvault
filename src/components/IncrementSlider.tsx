@@ -38,6 +38,8 @@ export const IncrementSlider: React.FC<IncrementSliderProps> = ({
   const delta = currentValue * step;
   const deltaText = delta === 0 ? '±0' : delta > 0 ? `+${delta}` : `${delta}`;
 
+  const totalNotches = range * 2 + 1;
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -58,6 +60,22 @@ export const IncrementSlider: React.FC<IncrementSliderProps> = ({
             cursor: 'pointer',
           }}
         />
+        <View style={styles.notchRow}>
+          {Array.from({ length: totalNotches }, (_, i) => {
+            const isCenter = i === range;
+            const isRightOfThumb = i - range > currentValue;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.notch,
+                  isCenter && styles.notchCenter,
+                  isRightOfThumb && styles.notchCyan,
+                ]}
+              />
+            );
+          })}
+        </View>
       </View>
       <Text style={styles.deltaText}>{deltaText}</Text>
     </View>
@@ -78,8 +96,29 @@ const styles = StyleSheet.create({
   },
   sliderWrapper: {
     flex: 1,
-    height: 36,
     justifyContent: 'center',
+  },
+  notchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    height: 6,
+    marginTop: -4,
+  },
+  notch: {
+    width: 5,
+    height: 5,
+    backgroundColor: colors.textSecondary,
+    borderRadius: 3,
+  },
+  notchCenter: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.textPrimary,
+  },
+  notchCyan: {
+    backgroundColor: colors.cyan,
   },
   deltaText: {
     color: colors.cyan,
