@@ -272,7 +272,8 @@ class WebDB implements DB {
   async updateBlockOrder(
     workoutId: number,
     exerciseId: number,
-    blockOrder: number,
+    oldBlockOrder: number,
+    newBlockOrder: number,
   ): Promise<void> {
     const tx = this.db.transaction('workout_sets', 'readwrite');
     const store = tx.objectStore('workout_sets');
@@ -281,9 +282,9 @@ class WebDB implements DB {
 
     await Promise.all(
       sets
-        .filter((s) => s.exercise_id === exerciseId)
+        .filter((s) => s.exercise_id === exerciseId && s.block_order === oldBlockOrder)
         .map((s) => {
-          s.block_order = blockOrder;
+          s.block_order = newBlockOrder;
           return store.put(s);
         }),
     );
@@ -296,22 +297,33 @@ class WebDB implements DB {
     const setsIndex = store.index('workout_id');
     const sets = await setsIndex.getAll(IDBKeyRange.only(workoutId));
 
-    // Determine exercise order by first (lowest) set ID per exercise
+    // Assign block_order per contiguous group of exercise_id by id order
     sets.sort((a, b) => a.id - b.id);
-    const exerciseOrder: number[] = [];
+    let blockOrder = 0;
+    let prevExerciseId: number | null = null;
     for (const s of sets) {
-      if (!exerciseOrder.includes(s.exercise_id)) {
-        exerciseOrder.push(s.exercise_id);
+      if (s.exercise_id !== prevExerciseId) {
+        if (prevExerciseId !== null) blockOrder++;
+        prevExerciseId = s.exercise_id;
       }
+      s.block_order = blockOrder;
     }
 
-    await Promise.all(
-      sets.map((s) => {
-        s.block_order = exerciseOrder.indexOf(s.exercise_id);
-        return store.put(s);
-      }),
-    );
+    await Promise.all(sets.map((s) => store.put(s)));
     await tx.done;
+  }
+
+  async getNextBlockOrder(workoutId: number): Promise<number> {
+    const setsIndex = this.db
+      .transaction('workout_sets', 'readonly')
+      .objectStore('workout_sets')
+      .index('workout_id');
+    const sets = await setsIndex.getAll(IDBKeyRange.only(workoutId));
+    let max = -1;
+    for (const s of sets) {
+      if (s.block_order != null && s.block_order > max) max = s.block_order;
+    }
+    return max + 1;
   }
 
   async updateWorkoutStartedAt(workoutId: number, startedAt: string): Promise<void> {
@@ -372,8 +384,10 @@ class WebDB implements DB {
     setIndex: number,
     reps: number | null,
     weight: number | null,
+    blockOrder?: number,
   ): Promise<WorkoutSet> {
     const completedAt = new Date().toISOString();
+    const bo = blockOrder ?? null;
     const setData = {
       workout_id: workoutId,
       exercise_id: exerciseId,
@@ -381,7 +395,7 @@ class WebDB implements DB {
       reps,
       weight,
       completed_at: completedAt,
-      block_order: null as number | null,
+      block_order: bo,
     };
 
     const id = await this.db.add('workout_sets', setData);

@@ -114,6 +114,9 @@ function createMockDB(): DB & { tables: Record<string, Row[]> } {
     },
     async updateBlockOrder() {},
     async backfillBlockOrder() {},
+    async getNextBlockOrder() {
+      return 0;
+    },
     async getWorkoutTimer() {
       return null;
     },

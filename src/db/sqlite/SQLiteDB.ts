@@ -211,11 +211,13 @@ class SQLiteDBImplementation implements DB {
     setIndex: number,
     reps: number | null,
     weight: number | null,
+    blockOrder?: number,
   ): Promise<WorkoutSet> {
+    const bo = blockOrder ?? null;
     const result = await this.db.runAsync(
-      `INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-      [workoutId, exerciseId, setIndex, reps, weight],
+      `INSERT INTO workout_sets (workout_id, exercise_id, set_index, reps, weight, completed_at, block_order)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
+      [workoutId, exerciseId, setIndex, reps, weight, bo],
     );
     return {
       id: result.lastInsertRowId,
@@ -225,7 +227,7 @@ class SQLiteDBImplementation implements DB {
       reps,
       weight,
       completed_at: new Date().toISOString(),
-      block_order: null,
+      block_order: bo,
     };
   }
 
@@ -299,26 +301,41 @@ class SQLiteDBImplementation implements DB {
   async updateBlockOrder(
     workoutId: number,
     exerciseId: number,
-    blockOrder: number,
+    oldBlockOrder: number,
+    newBlockOrder: number,
   ): Promise<void> {
     await this.db.runAsync(
-      'UPDATE workout_sets SET block_order = ? WHERE workout_id = ? AND exercise_id = ?',
-      [blockOrder, workoutId, exerciseId],
+      'UPDATE workout_sets SET block_order = ? WHERE workout_id = ? AND exercise_id = ? AND block_order = ?',
+      [newBlockOrder, workoutId, exerciseId, oldBlockOrder],
     );
   }
 
   async backfillBlockOrder(workoutId: number): Promise<void> {
-    const rows = await this.db.getAllAsync<{ exercise_id: number }>(
-      `SELECT exercise_id FROM workout_sets
-       WHERE workout_id = ? GROUP BY exercise_id ORDER BY MIN(id)`,
+    // Assign block_order per unique (exercise_id, contiguous group by id)
+    const rows = await this.db.getAllAsync<{ id: number; exercise_id: number }>(
+      'SELECT id, exercise_id FROM workout_sets WHERE workout_id = ? ORDER BY id',
       [workoutId],
     );
-    for (let i = 0; i < rows.length; i++) {
-      await this.db.runAsync(
-        'UPDATE workout_sets SET block_order = ? WHERE workout_id = ? AND exercise_id = ?',
-        [i, workoutId, rows[i].exercise_id],
-      );
+    let blockOrder = 0;
+    let prevExerciseId: number | null = null;
+    for (const row of rows) {
+      if (row.exercise_id !== prevExerciseId) {
+        if (prevExerciseId !== null) blockOrder++;
+        prevExerciseId = row.exercise_id;
+      }
+      await this.db.runAsync('UPDATE workout_sets SET block_order = ? WHERE id = ?', [
+        blockOrder,
+        row.id,
+      ]);
     }
+  }
+
+  async getNextBlockOrder(workoutId: number): Promise<number> {
+    const row = await this.db.getFirstAsync<{ max_bo: number | null }>(
+      'SELECT MAX(block_order) as max_bo FROM workout_sets WHERE workout_id = ?',
+      [workoutId],
+    );
+    return (row?.max_bo ?? -1) + 1;
   }
 
   async updateWorkoutStartedAt(workoutId: number, startedAt: string): Promise<void> {

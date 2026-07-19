@@ -58,6 +58,7 @@ export interface DB {
     setIndex: number,
     reps: number | null,
     weight: number | null,
+    blockOrder?: number,
   ): Promise<WorkoutSet>;
   updateSet(setId: number, reps: number | null, weight: number | null): Promise<void>;
   deleteSet(setId: number): Promise<void>;
@@ -67,8 +68,9 @@ export interface DB {
     excludeWorkoutId?: number,
     workoutCount?: number,
   ): Promise<WorkoutHistory[]>;
-  updateBlockOrder(workoutId: number, exerciseId: number, blockOrder: number): Promise<void>;
+  updateBlockOrder(workoutId: number, exerciseId: number, oldBlockOrder: number, newBlockOrder: number): Promise<void>;
   backfillBlockOrder(workoutId: number): Promise<void>;
+  getNextBlockOrder(workoutId: number): Promise<number>;
 
   // --- Timers ---
   getWorkoutTimer(workoutId: number): Promise<WorkoutTimer | null>;

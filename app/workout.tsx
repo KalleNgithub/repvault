@@ -73,18 +73,19 @@ export default function WorkoutScreen() {
     setAllExercises(exercises);
 
     const exerciseMap = new Map<number, { exercise: Exercise; sets: WorkoutSet[] }>();
-    GROUP_SETS_BY_EXERCISE: for (const s of sets) {
-      if (!exerciseMap.has(s.exercise_id)) {
+    GROUP_SETS_BY_BLOCK: for (const s of sets) {
+      const blockKey = s.block_order ?? s.id; // fallback shouldn't happen after backfill
+      if (!exerciseMap.has(blockKey)) {
         const ex = exercises.find((e) => e.id === s.exercise_id);
 
         if (!ex) {
           console.error(`Tietokantavirhe: Liikettä ID:llä ${s.exercise_id} ei löydy.`);
-          continue GROUP_SETS_BY_EXERCISE;
+          continue GROUP_SETS_BY_BLOCK;
         }
 
-        exerciseMap.set(s.exercise_id, { exercise: ex, sets: [] });
+        exerciseMap.set(blockKey, { exercise: ex, sets: [] });
       }
-      exerciseMap.get(s.exercise_id)!.sets.push(s);
+      exerciseMap.get(blockKey)!.sets.push(s);
     }
 
     LOAD_EXERCISE_BLOCKS: {
@@ -170,10 +171,8 @@ export default function WorkoutScreen() {
     const lastSets = await db.getLastSetsForExercise(exercise.id, workoutId);
     const prefillReps = lastSets.length > 0 ? lastSets[0].reps : null;
     const prefillWeight = lastSets.length > 0 ? lastSets[0].weight : null;
-    await db.addSet(workoutId, exercise.id, 0, prefillReps, prefillWeight);
-    // New exercise block goes to the end
-    const newBlockOrder = blocks.length;
-    await db.updateBlockOrder(workoutId, exercise.id, newBlockOrder);
+    const newBlockOrder = await db.getNextBlockOrder(workoutId);
+    await db.addSet(workoutId, exercise.id, 0, prefillReps, prefillWeight, newBlockOrder);
     await loadWorkout();
   };
 
@@ -189,18 +188,15 @@ export default function WorkoutScreen() {
       block.sets.length > 0
         ? block.sets[block.sets.length - 1]
         : (block.lastSets[block.sets.length] ?? null);
+    const blockOrder = block.sets[0]?.block_order ?? 0;
     await db.addSet(
       workoutId,
       block.exercise.id,
       lastIdx + 1,
       ref?.reps ?? null,
       ref?.weight ?? null,
+      blockOrder,
     );
-    // Ensure the new set inherits this block's order (use array position, not stale field)
-    const blockIdx = blocks.findIndex((b) => b.exercise.id === block.exercise.id);
-    if (blockIdx >= 0) {
-      await db.updateBlockOrder(workoutId, block.exercise.id, blockIdx);
-    }
     if (stopwatch.running) stopwatch.lap();
     await loadWorkout();
   };
@@ -293,10 +289,14 @@ export default function WorkoutScreen() {
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
 
-      // Persist new block order to DB
-      for (let i = 0; i < next.length; i++) {
-        db.updateBlockOrder(workoutId, next[i].exercise.id, i);
-      }
+      // Swap block_order values between the two blocks
+      const boA = prev[idx].sets[0]?.block_order ?? idx;
+      const boB = prev[target].sets[0]?.block_order ?? target;
+      // Use a temp value to avoid collision during swap
+      const tempBo = -1;
+      db.updateBlockOrder(workoutId, next[idx].exercise.id, boB, tempBo)
+        .then(() => db.updateBlockOrder(workoutId, next[target].exercise.id, boA, boB))
+        .then(() => db.updateBlockOrder(workoutId, next[idx].exercise.id, tempBo, boA));
 
       return next;
     });
@@ -586,7 +586,6 @@ export default function WorkoutScreen() {
           {showExercisePicker && (
             <View style={styles.pickerList}>
               {allExercises
-                .filter((e) => !blocks.some((b) => b.exercise.id === e.id))
                 .sort((a, b) =>
                   translateExercise(a.name, locale).localeCompare(
                     translateExercise(b.name, locale),
