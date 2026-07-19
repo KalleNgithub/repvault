@@ -68,7 +68,12 @@ export interface DB {
     excludeWorkoutId?: number,
     workoutCount?: number,
   ): Promise<WorkoutHistory[]>;
-  updateBlockOrder(workoutId: number, exerciseId: number, oldBlockOrder: number, newBlockOrder: number): Promise<void>;
+  updateBlockOrder(
+    workoutId: number,
+    exerciseId: number,
+    oldBlockOrder: number,
+    newBlockOrder: number,
+  ): Promise<void>;
   backfillBlockOrder(workoutId: number): Promise<void>;
   getNextBlockOrder(workoutId: number): Promise<number>;
 

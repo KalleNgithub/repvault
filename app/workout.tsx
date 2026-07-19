@@ -93,9 +93,9 @@ export default function WorkoutScreen() {
         break LOAD_EXERCISE_BLOCKS;
       }
       const newBlocks: ExerciseBlock[] = [];
-      for (const [exId, { exercise, sets: exSets }] of exerciseMap) {
-        const lastSets = await db.getLastSetsForExercise(exId, workoutId);
-        const history = await db.getExerciseHistory(exId, workoutId, 3);
+      for (const [_blockKey, { exercise, sets: exSets }] of exerciseMap) {
+        const lastSets = await db.getLastSetsForExercise(exercise.id, workoutId);
+        const history = await db.getExerciseHistory(exercise.id, workoutId, 3);
         newBlocks.push({ exercise, sets: exSets, lastSets, history, collapsed: false });
       }
 
@@ -292,11 +292,22 @@ export default function WorkoutScreen() {
       // Swap block_order values between the two blocks
       const boA = prev[idx].sets[0]?.block_order ?? idx;
       const boB = prev[target].sets[0]?.block_order ?? target;
-      // Use a temp value to avoid collision during swap
+
+      // Update in-memory block_order so handleAddSet uses correct values
+      next[idx] = {
+        ...next[idx],
+        sets: next[idx].sets.map((s) => ({ ...s, block_order: boA })),
+      };
+      next[target] = {
+        ...next[target],
+        sets: next[target].sets.map((s) => ({ ...s, block_order: boB })),
+      };
+
+      // Persist to DB using temp value to avoid collision during swap
       const tempBo = -1;
-      db.updateBlockOrder(workoutId, next[idx].exercise.id, boB, tempBo)
-        .then(() => db.updateBlockOrder(workoutId, next[target].exercise.id, boA, boB))
-        .then(() => db.updateBlockOrder(workoutId, next[idx].exercise.id, tempBo, boA));
+      db.updateBlockOrder(workoutId, prev[idx].exercise.id, boA, tempBo)
+        .then(() => db.updateBlockOrder(workoutId, prev[target].exercise.id, boB, boA))
+        .then(() => db.updateBlockOrder(workoutId, prev[idx].exercise.id, tempBo, boB));
 
       return next;
     });
@@ -453,7 +464,10 @@ export default function WorkoutScreen() {
           </View>
         )}
         {blocks.map((block, idx) => (
-          <View key={`${block.exercise.id}-${block.sets[0]?.block_order ?? idx}`} style={styles.exerciseBlock}>
+          <View
+            key={`${block.exercise.id}-${block.sets[0]?.block_order ?? idx}`}
+            style={styles.exerciseBlock}
+          >
             <View style={styles.exerciseHeader}>
               <Pressable onPress={() => toggleCollapse(idx)} style={styles.exerciseNameWrap}>
                 <Text style={styles.exerciseName}>
@@ -772,7 +786,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    width: '100%',        // Pakoittaa kentän täyttämään vain ympäröivän solun leveyden
+    width: '100%',
     minWidth: 40,
     padding: 0,
   },
