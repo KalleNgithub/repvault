@@ -453,7 +453,7 @@ export default function WorkoutScreen() {
           </View>
         )}
         {blocks.map((block, idx) => (
-          <View key={block.exercise.id} style={styles.exerciseBlock}>
+          <View key={`${block.exercise.id}-${block.sets[0]?.block_order ?? idx}`} style={styles.exerciseBlock}>
             <View style={styles.exerciseHeader}>
               <Pressable onPress={() => toggleCollapse(idx)} style={styles.exerciseNameWrap}>
                 <Text style={styles.exerciseName}>
